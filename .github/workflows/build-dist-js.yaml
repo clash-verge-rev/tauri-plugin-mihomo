@@ -30,6 +30,8 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
 
       - name: Export Bindings
         run: cargo test export_bindings
