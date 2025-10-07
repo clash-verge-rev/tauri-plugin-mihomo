@@ -42,10 +42,12 @@ jobs:
       - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
-          run_install: true
+          run_install: false
 
       - name: build dist
-        run: pnpm build
+        run: |
+          pnpm i
+          pnpm build
 
       - name: upload dist-js
         run: |
