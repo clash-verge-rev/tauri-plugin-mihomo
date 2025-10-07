@@ -1,4 +1,4 @@
-name: Build dist js
+name: Build dist-js
 
 on:
   workflow_dispatch:
@@ -49,10 +49,20 @@ jobs:
           pnpm i
           pnpm build
 
-      - name: upload dist-js
+      - name: Check file changed
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            frontend:
+              - 'dis-js/**'
+              - 'guest-js/**'
+
+      - name: Update dist-js or guest-js
+        if: steps.changes.outputs.frontend == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist
-          git commit -m "Update dist"
+          git add dist-js guest-js
+          git commit -m "Update frontend code"
           git push origin main
