@@ -2,7 +2,7 @@
   "name": "tauri-plugin-mihomo-api",
   "version": "0.1.0",
   "author": "oomeow",
-  "description": "Tauri plugin for Mihomo",
+  "description": "Tauri plugin for invoke Mihomo API",
   "type": "module",
   "types": "./dist-js/index.d.ts",
   "main": "./dist-js/index.cjs",
