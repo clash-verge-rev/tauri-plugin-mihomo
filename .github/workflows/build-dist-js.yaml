@@ -19,8 +19,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v5
 
+      - name: install webkit2gtk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev
+
       - name: Install Rust Stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Export Bindings
         run: cargo test export_bindings
