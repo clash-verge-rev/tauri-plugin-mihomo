@@ -84,7 +84,7 @@ async function getGroupByName(groupName) {
  * @param testUrl 测试 url
  * @param timeout 超时时间（毫秒）
  * @param keepFixed 是否保留已固定的节点, 默认 false
- * @returns 代理组里代理节点的延迟
+ * @returns 代理组中代理节点的延迟，返回数据中无超时节点的数据
  */
 async function delayGroup(groupName, testUrl, timeout, keepFixed = false) {
     return await core.invoke("plugin:mihomo|delay_group", {
