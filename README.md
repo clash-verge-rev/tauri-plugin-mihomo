@@ -21,3 +21,18 @@ cargo nextest run reload
 # 测试 restart 方法
 cargo nextest run restart
 ```
+
+### Contribute
+
+##### 准备环境
+
+- [`prek`](https://github.com/j178/prek): ⚡ Better `pre-commit`, re-engineered in Rust
+
+```shell
+# 前端构建文件
+pnpm i
+pnpm build
+
+# 修改了 `model.rs` 后，如需重新导出前端对象
+cargo test export_bindings
+```
