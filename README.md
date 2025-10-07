@@ -40,11 +40,15 @@ cargo nextest run restart
 
 - [`prek`](https://github.com/j178/prek): ⚡ Better `pre-commit`, re-engineered in Rust
 
+#### 构建前端文件
+
 ```shell
-# 前端构建文件
 pnpm i
 pnpm build
+```
 
-# 修改了 `model.rs` 后，如需重新导出前端对象
+#### 修改了 `model.rs` 后，如需重新导出前端对象
+
+```shell
 cargo test export_bindings
 ```
