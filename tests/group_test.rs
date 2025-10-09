@@ -45,6 +45,7 @@ async fn mihomo_group_select_node() -> Result<()> {
         .iter()
         .find(|i| matches!(i.proxy_type, ProxyType::Selector))
         .ok_or(failed_resp!("not fount selector group"))?;
+    #[allow(clippy::unwrap_used)]
     let origin_now = selector_group.now.clone().unwrap();
     println!("[{}], before select: {:?}", selector_group.name, selector_group.now);
 
@@ -136,6 +137,7 @@ async fn mihomo_group_get_provider_by_name() -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::unwrap_used)]
 #[tokio::test]
 async fn mihomo_group_update_provider() -> Result<()> {
     let mihomo = common::mihomo();

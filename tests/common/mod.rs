@@ -8,6 +8,7 @@ pub const TEST_URL: &str = "http://www.gstatic.com/generate_204";
 pub const TIMEOUT: u32 = 3000;
 
 pub fn mihomo() -> Mihomo {
+    #[allow(clippy::unwrap_used)]
     dotenvy::dotenv().unwrap();
     let _ = IpcConnectionPool::init(IpcPoolConfigBuilder::new().build());
     let mihomo_socket = std::env::var("MIHOMO_SOCKET").unwrap_or(String::from("0"));

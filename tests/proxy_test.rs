@@ -45,6 +45,7 @@ async fn mihomo_proxy_delay() -> Result<()> {
 }
 
 // 并发测试节点延迟
+#[allow(clippy::unwrap_used)]
 #[tokio::test]
 async fn bench_proxy_delay() -> Result<()> {
     let mihomo = common::mihomo();

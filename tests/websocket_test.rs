@@ -1,4 +1,4 @@
-use std::{fmt::Debug, time::Duration};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use serde::de::DeserializeOwned;
 use tauri::ipc::{Channel, InvokeResponseBody};
@@ -9,6 +9,7 @@ use tauri_plugin_mihomo::{
 
 mod common;
 
+#[allow(clippy::unwrap_used)]
 fn handle_message<T: Debug + DeserializeOwned>() -> Channel<serde_json::Value> {
     Channel::new(|message| {
         match message {
@@ -17,6 +18,7 @@ fn handle_message<T: Debug + DeserializeOwned>() -> Channel<serde_json::Value> {
                     if data.starts_with("websocket error") {
                         println!("received error: {data}");
                     } else {
+                        #[allow(clippy::unwrap_used)]
                         let data = serde_json::from_str::<T>(&data).unwrap();
                         println!("{data:?}");
                     }
@@ -44,7 +46,7 @@ async fn mihomo_websocket_memory() -> Result<()> {
     mihomo.disconnect(websocket_id, Some(0)).await?;
     for i in 0..10 {
         println!("check connection exist {i}");
-        let manager = mihomo.connection_manager.clone();
+        let manager = Arc::clone(&mihomo.connection_manager);
         let manager = manager.0.read().await;
         if manager.get(&websocket_id).is_none() {
             println!("connection exist");
@@ -70,7 +72,7 @@ async fn mihomo_websocket_traffic() -> Result<()> {
     mihomo.disconnect(websocket_id, Some(0)).await?;
     for i in 0..10 {
         println!("check connection exist {i}");
-        let manager = mihomo.connection_manager.clone();
+        let manager = Arc::clone(&mihomo.connection_manager);
         let manager = manager.0.read().await;
         if manager.get(&websocket_id).is_none() {
             println!("connection exist");
@@ -96,7 +98,7 @@ async fn mihomo_websocket_log() -> Result<()> {
     mihomo.disconnect(websocket_id, Some(0)).await?;
     for i in 0..10 {
         println!("check connection exist {i}");
-        let manager = mihomo.connection_manager.clone();
+        let manager = Arc::clone(&mihomo.connection_manager);
         let manager = manager.0.read().await;
         if manager.get(&websocket_id).is_none() {
             println!("connection exist");
@@ -122,7 +124,7 @@ async fn mihomo_websocket_connections() -> Result<()> {
     mihomo.disconnect(websocket_id, Some(0)).await?;
     for i in 0..10 {
         println!("check connection exist {i}");
-        let manager = mihomo.connection_manager.clone();
+        let manager = Arc::clone(&mihomo.connection_manager);
         let manager = manager.0.read().await;
         if manager.get(&websocket_id).is_none() {
             println!("connection exist");
