@@ -52,11 +52,11 @@ impl Mihomo {
         self.secret = secret;
     }
 
-    pub fn update_socket_path<S: Into<String>>(&mut self, socket_path: S) {
+    pub fn update_socket_path<S: Into<String>>(&mut self, socket_path: S) -> Result<()> {
         self.socket_path = Some(socket_path.into());
-        tauri::async_runtime::block_on(async {
-            let _ = IpcConnectionPool::global().clear_pool().await;
-        });
+        let pool = IpcConnectionPool::global()?;
+        tauri::async_runtime::block_on(pool.clear_pool());
+        Ok(())
     }
 
     fn get_req_url(&self, suffix_url: &str) -> Result<String> {
@@ -156,23 +156,28 @@ impl Mihomo {
     {
         let id = rand::random();
         log::info!("connecting to websocket: {url}, id: {id}");
-        let manager = self.connection_manager.clone();
+        let manager = Arc::clone(&self.connection_manager);
         let handle_message = |message| {
-            // log::trace!("handle message {message:?}");
+            let serialize_with_fallback = |ws_message: WebSocketMessage| {
+                serde_json::to_value(ws_message).unwrap_or_else(|err| {
+                    log::error!("Failed to serialize WebSocket message: {err}");
+                    serde_json::Value::Null
+                })
+            };
+
             match message {
-                Ok(Message::Text(t)) => serde_json::to_value(WebSocketMessage::Text(t.to_string())).unwrap(),
-                Ok(Message::Binary(t)) => serde_json::to_value(WebSocketMessage::Binary(t.to_vec())).unwrap(),
-                Ok(Message::Ping(t)) => serde_json::to_value(WebSocketMessage::Ping(t.to_vec())).unwrap(),
-                Ok(Message::Pong(t)) => serde_json::to_value(WebSocketMessage::Pong(t.to_vec())).unwrap(),
-                Ok(Message::Close(t)) => serde_json::to_value(WebSocketMessage::Close(t.map(|v| CloseFrame {
+                Ok(Message::Text(t)) => serialize_with_fallback(WebSocketMessage::Text(t.to_string())),
+                Ok(Message::Binary(t)) => serialize_with_fallback(WebSocketMessage::Binary(t.to_vec())),
+                Ok(Message::Ping(t)) => serialize_with_fallback(WebSocketMessage::Ping(t.to_vec())),
+                Ok(Message::Pong(t)) => serialize_with_fallback(WebSocketMessage::Pong(t.to_vec())),
+                Ok(Message::Close(t)) => serialize_with_fallback(WebSocketMessage::Close(t.map(|v| CloseFrame {
                     code: v.code.into(),
                     reason: v.reason.to_string(),
-                })))
-                .unwrap(),
-                Ok(Message::Frame(_)) => serde_json::Value::Null, // This value can't be received.
+                }))),
+                Ok(Message::Frame(_)) => serde_json::Value::Null,
                 Err(e) => {
                     log::error!("websocket error: {e}");
-                    serde_json::to_value(WebSocketMessage::Text(Error::from(e).to_string())).unwrap()
+                    serialize_with_fallback(WebSocketMessage::Text(Error::from(e).to_string()))
                 }
             }
         };
@@ -191,7 +196,7 @@ impl Mihomo {
                     .insert(id, WebSocketWriter::TcpStreamWriter(writer));
 
                 tokio::spawn(async move {
-                    let manager_ = manager.clone();
+                    let manager_ = Arc::clone(&manager);
                     loop {
                         let ids: Vec<u32> = manager_.0.read().await.keys().cloned().collect();
                         log::trace!("waiting for websocket message, connection_id: {id}, manager_ids: {ids:?}",);
@@ -235,7 +240,7 @@ impl Mihomo {
                         .insert(id, WebSocketWriter::SocketStreamWriter(writer));
 
                     tokio::spawn(async move {
-                        let manager_ = manager.clone();
+                        let manager_ = Arc::clone(&manager);
                         loop {
                             let ids: Vec<u32> = manager_.0.read().await.keys().cloned().collect();
                             log::trace!("waiting for websocket message, connection_id: {id}, manager_ids: {ids:?}",);
@@ -267,7 +272,7 @@ impl Mihomo {
 
     /// 向指定 WebSocket 连接发送消息 (暂无使用该方法的地方)
     async fn send(&self, id: ConnectionId, message: WebSocketMessage) -> Result<()> {
-        let manager = self.connection_manager.clone();
+        let manager = Arc::clone(&self.connection_manager);
         let mut manager = manager.0.write().await;
         if let Some(writer) = manager.get_mut(&id) {
             let data = match message {
@@ -300,7 +305,7 @@ impl Mihomo {
             // ignore send error
             let _ = writer.send(close_message).await;
             if let Some(timeout) = force_timeout {
-                let manager_ = self.connection_manager.clone();
+                let manager_ = Arc::clone(&self.connection_manager);
                 tokio::spawn(async move {
                     tokio::time::sleep(Duration::from_millis(timeout)).await;
                     log::debug!("force close websocket connection");
@@ -671,9 +676,9 @@ impl Mihomo {
     }
 
     /// 更新基础配置
-    pub async fn patch_base_config<D: serde::Serialize + ?Sized>(&self, data: &D) -> Result<()> {
-        let client = self.build_request(Method::PATCH, "/configs")?.json(&data);
-        let response = self.send_by_protocol(client).await?;
+    pub async fn patch_base_config<D: serde::Serialize + Clone + Sync>(&self, data: &D) -> Result<()> {
+        let client = { self.build_request(Method::PATCH, "/configs")?.json(&data) };
+        let response = { self.send_by_protocol(client).await? };
         if !response.status().is_success() {
             ret_failed_resp!("patch base config error, {}", response.text().await?);
         }
@@ -712,9 +717,8 @@ impl Mihomo {
                     Some(msg) => {
                         if msg.to_lowercase().contains("already using latest version") {
                             ret_failed_resp!("already using latest version");
-                        } else {
-                            ret_failed_resp!("{}", msg.clone());
                         }
+                        ret_failed_resp!("{}", msg.clone());
                     }
                     None => {
                         ret_failed_resp!("upgrade core failed");

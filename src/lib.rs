@@ -147,7 +147,12 @@ impl Builder {
             ])
             .setup(move |app, _api| {
                 // 初始化连接池
-                IpcConnectionPool::init(pool_config).expect("Failed to initialize ipc connection pool");
+                IpcConnectionPool::init(pool_config).map_err(|e| {
+                    tauri::Error::PluginInitialization(
+                        "Failed to initialize IPC connection pool: {}".to_string(),
+                        e.to_string(),
+                    )
+                })?;
 
                 app.manage(RwLock::new(Mihomo {
                     protocol,

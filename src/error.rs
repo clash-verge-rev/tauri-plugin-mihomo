@@ -32,6 +32,8 @@ pub enum Error {
     HttpParseError(String),
     #[error("Parse error, {0}")]
     ParseError(String),
+    #[error("Connection pool not initialized")]
+    ConnectionPoolNotInitialized,
     #[error("Connection pool init failed")]
     ConnectionPoolInitFailed,
     #[error("Connection pool is full")]

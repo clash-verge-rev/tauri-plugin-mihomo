@@ -442,8 +442,8 @@ impl IpcConnectionPool {
             .map_err(|_| Error::ConnectionPoolInitFailed)
     }
 
-    pub fn global() -> &'static Self {
-        CONNECTION_POOL.get().expect("IpcConnectionPool is not initialized")
+    pub fn global() -> Result<&'static Self> {
+        CONNECTION_POOL.get().ok_or(Error::ConnectionPoolNotInitialized)
     }
 
     /// 启动清理空闲连接的任务线程
@@ -550,7 +550,7 @@ impl IpcConnectionPool {
     async fn create_connection(socket_path: &str) -> Result<IpcConnection> {
         log::trace!(
             "creating connection, available permits: {}",
-            Self::global().semaphore.available_permits()
+            Self::global()?.semaphore.available_permits()
         );
         match connect_to_socket(socket_path).await {
             Ok(stream) => Ok(IpcConnection::new(stream)),
@@ -604,7 +604,7 @@ impl LocalSocket for RequestBuilder {
         let timeout = request.timeout().cloned();
 
         let process = async move {
-            let pool = IpcConnectionPool::global();
+            let pool = IpcConnectionPool::global()?;
             let (mut conn, _permit) = pool.get_connection(socket_path).await?;
             // let mut stream = connect_to_socket(socket_path).await?;
             log::debug!("building socket request");
