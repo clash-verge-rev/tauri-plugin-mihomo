@@ -14,7 +14,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    Error, IpcConnectionPool, Result, failed_resp,
+    Error, IpcConnectionPool, Result,
     ipc::LocalSocket,
     models::{
         BaseConfig, CloseFrame, ConnectionId, ConnectionManager, Connections, CoreUpdaterChannel, ErrorResponse,
@@ -690,7 +690,7 @@ impl Mihomo {
         let client = self.build_request(Method::POST, "/configs/geo")?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
-            failed_resp!("update geo database error, {}", response.text().await?);
+            ret_failed_resp!("update geo database error, {}", response.text().await?);
         }
         Ok(())
     }
@@ -700,7 +700,7 @@ impl Mihomo {
         let client = self.build_request(Method::POST, "/restart")?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
-            failed_resp!("restart core failed, {}", response.text().await?);
+            ret_failed_resp!("restart core failed, {}", response.text().await?);
         }
         Ok(())
     }
@@ -712,18 +712,14 @@ impl Mihomo {
             .query(&[("channel", &channel.to_string()), ("force", &force.to_string())]);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
-            match response.json::<HashMap<String, String>>().await {
-                Ok(res) => match res.get("message") {
-                    Some(msg) => {
-                        if msg.to_lowercase().contains("already using latest version") {
-                            ret_failed_resp!("already using latest version");
-                        }
-                        ret_failed_resp!("{}", msg.clone());
+            match response.json::<ErrorResponse>().await {
+                Ok(err_res) => {
+                    let msg = err_res.message;
+                    if msg.to_lowercase().contains("already using latest version") {
+                        ret_failed_resp!("already using latest version");
                     }
-                    None => {
-                        ret_failed_resp!("upgrade core failed");
-                    }
-                },
+                    ret_failed_resp!("{}", msg);
+                }
                 Err(e) => {
                     ret_failed_resp!("upgrade core failed, {}", e);
                 }
