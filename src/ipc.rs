@@ -47,7 +47,7 @@ impl WrapStream {
                 match s.try_read(&mut buf) {
                     Ok(n) => Ok(n != 0),
                     Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(true),
-                    Err(e) => Err(Error::Io(e)),
+                    Err(_) => Err(Error::ConnectionLost),
                 }
             }
             #[cfg(windows)]
@@ -58,7 +58,7 @@ impl WrapStream {
                 match s.try_read(&mut buf) {
                     Ok(n) => Ok(n != 0),
                     Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(true),
-                    Err(e) => Err(Error::Io(e)),
+                    Err(_) => Err(Error::ConnectionLost),
                 }
             }
         }
