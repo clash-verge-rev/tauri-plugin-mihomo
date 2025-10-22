@@ -35,11 +35,11 @@ impl Display for Protocol {
 #[ts(export, rename_all = "camelCase")]
 #[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct BaseConfig {
-    pub port: u32,
-    pub socks_port: u32,
-    pub redir_port: u32,
-    pub tproxy_port: u32,
-    pub mixed_port: u32,
+    pub port: u16,
+    pub socks_port: u16,
+    pub redir_port: u16,
+    pub tproxy_port: u16,
+    pub mixed_port: u16,
     pub tun: TunConfig,
     pub tuic_server: TuicServer,
     pub ss_config: String,

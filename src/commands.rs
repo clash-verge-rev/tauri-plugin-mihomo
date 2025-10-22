@@ -8,7 +8,7 @@ use crate::{Result, mihomo::Mihomo, models::*};
 pub(crate) async fn update_controller(
     state: State<'_, RwLock<Mihomo>>,
     host: Option<String>,
-    port: Option<u32>,
+    port: Option<u16>,
 ) -> Result<()> {
     let mut mihomo = state.write().await;
     mihomo.update_external_host(host);

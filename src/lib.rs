@@ -33,7 +33,7 @@ impl<R: Runtime, T: Manager<R>> crate::MihomoExt<R> for T {
 pub struct Builder {
     protocol: Protocol,
     external_host: Option<String>,
-    external_port: Option<u32>,
+    external_port: Option<u16>,
     secret: Option<String>,
     socket_path: Option<String>,
     pool_config: Option<IpcPoolConfig>,
@@ -67,7 +67,7 @@ impl Builder {
         self
     }
 
-    pub fn external_port(mut self, external_port: u32) -> Self {
+    pub fn external_port(mut self, external_port: u16) -> Self {
         self.external_port = Some(external_port);
         self
     }

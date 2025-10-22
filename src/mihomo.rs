@@ -29,7 +29,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 pub struct Mihomo {
     pub protocol: Protocol,
     pub external_host: Option<String>,
-    pub external_port: Option<u32>,
+    pub external_port: Option<u16>,
     pub secret: Option<String>,
     pub socket_path: Option<String>,
     pub connection_manager: Arc<ConnectionManager>,
@@ -44,7 +44,7 @@ impl Mihomo {
         self.external_host = host;
     }
 
-    pub fn update_external_port(&mut self, port: Option<u32>) {
+    pub fn update_external_port(&mut self, port: Option<u16>) {
         self.external_port = port;
     }
 
