@@ -451,8 +451,9 @@ impl IpcConnectionPool {
         let pool = self.clone();
 
         tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(pool.config.health_check_interval);
             loop {
-                tokio::time::sleep(pool.config.health_check_interval).await;
+                interval.tick().await;
                 pool.cleanup_idle_connections().await;
             }
         });
