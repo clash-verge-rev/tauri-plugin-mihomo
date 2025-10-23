@@ -60,7 +60,7 @@ jobs:
           base: HEAD
           filters: |
             frontend:
-              - 'dis-js/**'
+              - 'dist-js/**'
               - 'guest-js/**'
 
       - name: Update dist-js or guest-js
