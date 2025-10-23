@@ -20,7 +20,7 @@ async function updateSecret(secret) {
     await core.invoke("plugin:mihomo|update_secret", { secret });
 }
 /**
- * 获取Mihomo版本信息
+ * 获取 Mihomo 版本信息
  */
 async function getVersion() {
     return await core.invoke("plugin:mihomo|get_version");

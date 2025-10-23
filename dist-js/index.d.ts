@@ -12,7 +12,7 @@ export declare function updateController(controller: string): Promise<void>;
  */
 export declare function updateSecret(secret: string): Promise<void>;
 /**
- * 获取Mihomo版本信息
+ * 获取 Mihomo 版本信息
  */
 export declare function getVersion(): Promise<MihomoVersion>;
 /**
