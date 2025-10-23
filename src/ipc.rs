@@ -465,10 +465,15 @@ impl IpcConnectionPool {
 
         // 移除超时空闲连接，但保留最小连接数
         let min_to_keep = self.config.min_connections;
-        let mut kept_connections = 0;
 
         let mut connections = self.connections.lock().await;
         let before = connections.len();
+        if before < min_to_keep {
+            log::debug!("connections less than min_to_keep, skip cleanup");
+            return;
+        }
+
+        let mut kept_connections = 0;
         connections.retain(|conn| {
             if kept_connections < min_to_keep || now.duration_since(conn.last_used) <= self.config.idle_timeout {
                 kept_connections += 1;
