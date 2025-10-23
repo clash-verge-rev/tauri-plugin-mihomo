@@ -39,7 +39,7 @@ export async function updateSecret(secret: string): Promise<void> {
 }
 
 /**
- * 获取Mihomo版本信息
+ * 获取 Mihomo 版本信息
  */
 export async function getVersion(): Promise<MihomoVersion> {
   return await invoke<MihomoVersion>("plugin:mihomo|get_version");
