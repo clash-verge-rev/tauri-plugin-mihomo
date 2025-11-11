@@ -40,6 +40,7 @@ impl Mihomo {
         self.protocol = protocol;
     }
 
+    #[inline]
     pub fn update_external_host(&mut self, host: Option<String>) {
         self.external_host = host;
     }
@@ -48,10 +49,12 @@ impl Mihomo {
         self.external_port = port;
     }
 
+    #[inline]
     pub fn update_secret(&mut self, secret: Option<String>) {
         self.secret = secret;
     }
 
+    #[inline]
     pub fn update_socket_path<S: Into<String>>(&mut self, socket_path: S) -> Result<()> {
         self.socket_path = Some(socket_path.into());
         let pool = IpcConnectionPool::global()?;
@@ -59,6 +62,7 @@ impl Mihomo {
         Ok(())
     }
 
+    #[inline]
     fn get_req_url(&self, suffix_url: &str) -> Result<String> {
         let suffix_url = suffix_url.trim_start_matches("/");
         match self.protocol {
@@ -78,6 +82,7 @@ impl Mihomo {
         }
     }
 
+    #[inline]
     fn get_req_headers(&self) -> Result<HeaderMap<HeaderValue>> {
         let mut headers = HeaderMap::new();
         headers.insert(HOST, HeaderValue::from_str("localhost")?);
@@ -91,6 +96,7 @@ impl Mihomo {
         Ok(headers)
     }
 
+    #[inline]
     fn build_request(&self, method: Method, suffix_url: &str) -> Result<RequestBuilder> {
         let url = self.get_req_url(suffix_url)?;
         let headers = self.get_req_headers()?;
@@ -129,6 +135,7 @@ impl Mihomo {
         }
     }
 
+    #[inline]
     fn get_websocket_url(&self, suffix_url: &str) -> Result<String> {
         let suffix_url = suffix_url.trim_start_matches("/");
         match self.protocol {

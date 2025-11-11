@@ -4,6 +4,7 @@ use base64::{Engine, engine::general_purpose};
 use rand::Rng;
 
 /// 生成 WebSocket 握手密钥
+#[inline]
 pub fn generate_websocket_key() -> String {
     // 生成 16 字节随机数
     let mut rng = rand::rng();

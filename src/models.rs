@@ -17,6 +17,7 @@ pub enum Protocol {
 }
 
 impl Display for Protocol {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Protocol::Http => write!(f, "http"),
@@ -331,6 +332,7 @@ pub enum LogLevel {
 }
 
 impl Display for LogLevel {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LogLevel::DEBUG => write!(f, "debug"),
@@ -381,6 +383,7 @@ pub enum CoreUpdaterChannel {
 }
 
 impl Display for CoreUpdaterChannel {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CoreUpdaterChannel::ReleaseChannel => write!(f, "release"),
@@ -401,6 +404,7 @@ pub enum ClashMode {
 }
 
 impl Display for ClashMode {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ClashMode::Rule => write!(f, "rule"),
@@ -421,6 +425,7 @@ pub enum TunStack {
 }
 
 impl Display for TunStack {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TunStack::Mixed => write!(f, "Mixed"),

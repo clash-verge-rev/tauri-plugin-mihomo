@@ -45,6 +45,7 @@ pub enum Error {
 }
 
 impl Serialize for Error {
+    #[inline]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -54,18 +55,21 @@ impl Serialize for Error {
 }
 
 impl From<tokio_tungstenite::tungstenite::Error> for Error {
+    #[inline]
     fn from(e: tokio_tungstenite::tungstenite::Error) -> Self {
         crate::Error::Websocket(e.to_string())
     }
 }
 
 impl From<std::string::FromUtf8Error> for Error {
+    #[inline]
     fn from(e: std::string::FromUtf8Error) -> Self {
         crate::Error::ParseError(e.to_string())
     }
 }
 
 impl From<std::num::ParseIntError> for Error {
+    #[inline]
     fn from(e: std::num::ParseIntError) -> Self {
         crate::Error::ParseError(e.to_string())
     }

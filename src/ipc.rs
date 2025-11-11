@@ -37,6 +37,7 @@ pub enum WrapStream {
 }
 
 impl WrapStream {
+    #[inline]
     pub fn is_available(&self) -> Result<bool> {
         match self {
             #[cfg(unix)]
@@ -83,6 +84,7 @@ impl WrapStream {
 }
 
 impl AsyncRead for WrapStream {
+    #[inline]
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -98,6 +100,7 @@ impl AsyncRead for WrapStream {
 }
 
 impl AsyncWrite for WrapStream {
+    #[inline]
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
         match self.project() {
             #[cfg(unix)]
@@ -107,6 +110,7 @@ impl AsyncWrite for WrapStream {
         }
     }
 
+    #[inline]
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.project() {
             #[cfg(unix)]
@@ -116,6 +120,7 @@ impl AsyncWrite for WrapStream {
         }
     }
 
+    #[inline]
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.project() {
             #[cfg(unix)]
@@ -158,6 +163,7 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
     }
 }
 
+#[inline]
 fn generate_socket_request(req: reqwest::Request) -> Result<String> {
     let method = req.method().as_str();
     let mut path = req.url().path().to_string();
@@ -190,6 +196,7 @@ fn generate_socket_request(req: reqwest::Request) -> Result<String> {
     Ok(raw)
 }
 
+#[inline]
 fn generate_socket_response(header: String, body: String) -> Result<reqwest::Response> {
     log::debug!("parsing socket response");
     let mut headers = [EMPTY_HEADER; 16];
@@ -389,18 +396,21 @@ struct IpcConnection {
 impl Deref for IpcConnection {
     type Target = WrapStream;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.stream
     }
 }
 
 impl DerefMut for IpcConnection {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.stream
     }
 }
 
 impl IpcConnection {
+    #[inline]
     fn new(stream: WrapStream) -> Self {
         Self {
             stream,
@@ -408,6 +418,7 @@ impl IpcConnection {
         }
     }
 
+    #[inline]
     fn is_valid(&mut self) -> bool {
         self.stream.is_available().unwrap_or_default()
     }
@@ -424,6 +435,7 @@ pub struct IpcConnectionPool {
 static CONNECTION_POOL: OnceLock<IpcConnectionPool> = OnceLock::new();
 
 impl IpcConnectionPool {
+    #[inline]
     fn new(config: IpcPoolConfig) -> Self {
         let pool = IpcConnectionPool {
             semaphore: Arc::new(Semaphore::new(config.max_connections)),
@@ -436,17 +448,20 @@ impl IpcConnectionPool {
     }
 
     /// 初始化全局实例
+    #[inline]
     pub fn init(config: IpcPoolConfig) -> Result<()> {
         CONNECTION_POOL
             .set(IpcConnectionPool::new(config))
             .map_err(|_| Error::ConnectionPoolInitFailed)
     }
 
+    #[inline]
     pub fn global() -> Result<&'static Self> {
         CONNECTION_POOL.get().ok_or(Error::ConnectionPoolNotInitialized)
     }
 
     /// 启动清理空闲连接的任务线程
+    #[inline]
     fn start_clear_idle_conns_task(&self) {
         let pool = self.clone();
 
@@ -460,6 +475,7 @@ impl IpcConnectionPool {
     }
 
     // 清理空闲连接
+    #[inline]
     async fn cleanup_idle_connections(&self) {
         log::debug!("cleanup idle connections");
         let now = Instant::now();
@@ -490,6 +506,7 @@ impl IpcConnectionPool {
         );
     }
 
+    #[inline]
     async fn get_connection<'a>(&'a self, socket_path: &str) -> Result<(IpcConnection, SemaphorePermit<'a>)> {
         log::debug!("get connection from pool");
         // 确保获取 semaphore permit
@@ -584,10 +601,7 @@ impl IpcConnectionPool {
 
     pub async fn clear_pool(&self) {
         let mut connections = self.connections.lock().await;
-        for conn in connections.drain(..) {
-            drop(conn);
-        }
-        connections.clear();
+        connections.retain(|_conn| false);
     }
 }
 
