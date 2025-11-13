@@ -24,8 +24,6 @@ use crate::{
     ret_failed_resp, utils,
 };
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
-
 pub struct Mihomo {
     pub protocol: Protocol,
     pub external_host: Option<String>,
@@ -114,7 +112,7 @@ impl Mihomo {
             }
         };
         // 在此设置 timeout，以供构建 local socket 连接时，获取到 timeout 属性
-        Ok(req?.timeout(DEFAULT_TIMEOUT))
+        Ok(req?.timeout(Duration::from_secs(5)))
     }
 
     async fn send_by_protocol(&self, client: RequestBuilder) -> Result<reqwest::Response> {
@@ -786,7 +784,9 @@ impl Mihomo {
 
     /// 更新 Geo, 同 [`upgrade_geo`](crate::mihomo::Mihomo::upgrade_geo)
     pub async fn update_geo(&self) -> Result<()> {
-        let client = self.build_request(Method::POST, "/configs/geo")?;
+        let client = self
+            .build_request(Method::POST, "/configs/geo")?
+            .timeout(Duration::from_secs(60));
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
@@ -816,6 +816,7 @@ impl Mihomo {
     pub async fn upgrade_core(&self, channel: CoreUpdaterChannel, force: bool) -> Result<()> {
         let client = self
             .build_request(Method::POST, "/upgrade")?
+            .timeout(Duration::from_secs(60))
             .query(&[("channel", &channel.to_string()), ("force", &force.to_string())]);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
@@ -837,7 +838,9 @@ impl Mihomo {
 
     /// 更新 UI
     pub async fn upgrade_ui(&self) -> Result<()> {
-        let client = self.build_request(Method::POST, "/upgrade/ui")?;
+        let client = self
+            .build_request(Method::POST, "/upgrade/ui")?
+            .timeout(Duration::from_secs(60));
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
@@ -851,7 +854,9 @@ impl Mihomo {
 
     /// 更新 Geo
     pub async fn upgrade_geo(&self) -> Result<()> {
-        let client = self.build_request(Method::POST, "/upgrade/geo")?;
+        let client = self
+            .build_request(Method::POST, "/upgrade/geo")?
+            .timeout(Duration::from_secs(60));
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
