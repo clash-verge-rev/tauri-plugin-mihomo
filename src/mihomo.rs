@@ -24,6 +24,8 @@ use crate::{
     ret_failed_resp, utils,
 };
 
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
 pub struct Mihomo {
     pub protocol: Protocol,
     pub external_host: Option<String>,
@@ -112,7 +114,7 @@ impl Mihomo {
             }
         };
         // 在此设置 timeout，以供构建 local socket 连接时，获取到 timeout 属性
-        Ok(req?.timeout(Duration::from_secs(5)))
+        Ok(req?.timeout(DEFAULT_REQUEST_TIMEOUT))
     }
 
     async fn send_by_protocol(&self, client: RequestBuilder) -> Result<reqwest::Response> {
@@ -501,7 +503,8 @@ impl Mihomo {
         let group_name = urlencoding::encode(group_name);
         let test_url = urlencoding::encode(test_url);
         let suffix_url = format!("/group/{group_name}/delay?url={test_url}&timeout={timeout}");
-        let client = self.build_request(Method::GET, &suffix_url)?;
+        let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
+        let client = self.build_request(Method::GET, &suffix_url)?.timeout(req_timeout);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
@@ -584,9 +587,11 @@ impl Mihomo {
         let provider_name = urlencoding::encode(provider_name);
         let proxy_name = urlencoding::encode(proxy_name);
         let suffix_url = format!("/providers/proxies/{provider_name}/{proxy_name}/healthcheck",);
+        let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
         let client = self
             .build_request(Method::GET, &suffix_url)?
-            .query(&[("url", test_url), ("timeout", &timeout.to_string())]);
+            .query(&[("url", test_url), ("timeout", &timeout.to_string())])
+            .timeout(req_timeout);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             // maybe proxy delay is timeout response, try parse it.
@@ -675,9 +680,11 @@ impl Mihomo {
     pub async fn delay_proxy_by_name(&self, proxy_name: &str, test_url: &str, timeout: u32) -> Result<ProxyDelay> {
         let proxy_name = urlencoding::encode(proxy_name);
         let suffix_url = format!("/proxies/{proxy_name}/delay");
+        let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
         let client = self
             .build_request(Method::GET, &suffix_url)?
-            .query(&[("timeout", &timeout.to_string()), ("url", &test_url.to_string())]);
+            .query(&[("timeout", &timeout.to_string()), ("url", &test_url.to_string())])
+            .timeout(req_timeout);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             match response.json::<ErrorResponse>().await {

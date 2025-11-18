@@ -623,10 +623,11 @@ impl LocalSocket for RequestBuilder {
         let request = self.build()?;
         let timeout = request.timeout().cloned();
 
+        let pool = IpcConnectionPool::global()?;
+        let (mut conn, _permit) = pool.get_connection(socket_path).await?;
+        // let mut stream = connect_to_socket(socket_path).await?;
+
         let process = async move {
-            let pool = IpcConnectionPool::global()?;
-            let (mut conn, _permit) = pool.get_connection(socket_path).await?;
-            // let mut stream = connect_to_socket(socket_path).await?;
             log::debug!("building socket request");
             let req_str = generate_socket_request(request)?;
             log::debug!("request string: {req_str:?}");
