@@ -765,10 +765,10 @@ impl Mihomo {
             .query(&[("force", force)])
             .json(&body);
         let response_result = self.send_by_protocol(client).await;
-        if matches!(self.protocol, Protocol::LocalSocket) {
-            if let Ok(pool) = IpcConnectionPool::global() {
-                pool.clear_pool().await;
-            }
+        if matches!(self.protocol, Protocol::LocalSocket)
+            && let Ok(pool) = IpcConnectionPool::global()
+        {
+            pool.clear_pool().await;
         }
         let response = response_result?;
         if !response.status().is_success() {

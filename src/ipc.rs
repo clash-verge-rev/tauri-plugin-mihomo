@@ -170,10 +170,9 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
             log::error!("socket connect retries exhausted: {socket_path}, {err}");
             Err(Error::Io(err))
         } else {
-            Err(Error::Io(std::io::Error::new(
-                ErrorKind::Other,
-                format!("socket connect retries exhausted: {socket_path}"),
-            )))
+            Err(Error::Io(std::io::Error::other(format!(
+                "socket connect retries exhausted: {socket_path}"
+            ))))
         }
     }
 
