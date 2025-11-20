@@ -677,6 +677,7 @@ impl LocalSocket for RequestBuilder {
             let mut reader = BufReader::new(&mut conn.stream);
 
             // 读取解析 header
+            log::debug!("read headers");
             let header = read_header(&mut reader).await?;
             // 解析 Content-Length, 判断是否是 chunked 响应
             let mut content_length: Option<usize> = None;
@@ -691,7 +692,9 @@ impl LocalSocket for RequestBuilder {
             }
 
             // 读取 body
+            log::debug!("read body");
             let body = if is_chunked {
+                log::debug!("parse chunked data");
                 read_chunked_data(&mut reader).await?
             } else if let Some(content_length) = content_length {
                 log::debug!("content length: {content_length}");
@@ -702,7 +705,7 @@ impl LocalSocket for RequestBuilder {
                 // 使用空的 body
                 String::new()
             };
-            log::debug!("receive response success");
+            log::debug!("receive and parse response success");
             // reader.shutdown().await?;
             pool.release_connection(conn).await;
             generate_socket_response(header, body)
