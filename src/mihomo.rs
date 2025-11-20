@@ -764,7 +764,13 @@ impl Mihomo {
             .build_request(Method::PUT, "/configs")?
             .query(&[("force", force)])
             .json(&body);
-        let response = self.send_by_protocol(client).await?;
+        let response_result = self.send_by_protocol(client).await;
+        if matches!(self.protocol, Protocol::LocalSocket) {
+            if let Ok(pool) = IpcConnectionPool::global() {
+                pool.clear_pool().await;
+            }
+        }
+        let response = response_result?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
                 |e| format!("reload base config failed, {}", e),

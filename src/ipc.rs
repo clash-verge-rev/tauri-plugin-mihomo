@@ -21,7 +21,7 @@ use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     sync::{Mutex, Semaphore, SemaphorePermit},
-    time::timeout,
+    time::{sleep, timeout},
 };
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
@@ -134,30 +134,68 @@ impl AsyncWrite for WrapStream {
 pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
     #[cfg(unix)]
     {
-        if !std::path::Path::new(socket_path).exists() {
-            log::error!("socket path is not exists: {socket_path}");
-            return Err(Error::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("socket path: {socket_path} not found"),
-            )));
+        use std::io::ErrorKind;
+
+        const MAX_RETRIES: usize = 3;
+        const RETRY_DELAY: Duration = Duration::from_millis(125);
+
+        let socket_path_buf = std::path::Path::new(socket_path);
+        let mut last_err: Option<std::io::Error> = None;
+
+        for attempt in 0..=MAX_RETRIES {
+            if !socket_path_buf.exists() {
+                last_err = Some(std::io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("socket path: {socket_path} not found"),
+                ));
+            } else {
+                match UnixStream::connect(socket_path).await {
+                    Ok(stream) => return Ok(WrapStream::Unix(stream)),
+                    Err(e) => {
+                        last_err = Some(e);
+                        log::warn!(
+                            "failed to connect to socket: {socket_path} (attempt {attempt}), {}",
+                            last_err.as_ref().map_or("unknown".to_string(), |e| e.to_string())
+                        );
+                    }
+                }
+            }
+
+            if attempt < MAX_RETRIES {
+                sleep(RETRY_DELAY).await;
+            }
         }
-        Ok(WrapStream::Unix(UnixStream::connect(socket_path).await?))
+
+        if let Some(err) = last_err {
+            log::error!("socket connect retries exhausted: {socket_path}, {err}");
+            Err(Error::Io(err))
+        } else {
+            Err(Error::Io(std::io::Error::new(
+                ErrorKind::Other,
+                format!("socket connect retries exhausted: {socket_path}"),
+            )))
+        }
     }
 
     #[cfg(windows)]
     {
+        const MAX_RETRIES: usize = 3;
+        const RETRY_DELAY: Duration = Duration::from_millis(125);
+
         let client = loop {
             match ClientOptions::new().open(socket_path) {
                 Ok(client) => break client,
                 Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => (),
                 Err(e) => {
-                    log::error!("failed to connect to named pipe: {socket_path}, {e}");
-                    return Err(Error::FailedResponse(format!(
-                        "Failed to connect to named pipe: {socket_path}, {e}"
-                    )));
+                    log::warn!("failed to connect to named pipe: {socket_path}, {e}");
+                    if MAX_RETRIES == 0 {
+                        return Err(Error::FailedResponse(format!(
+                            "Failed to connect to named pipe: {socket_path}, {e}"
+                        )));
+                    }
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            sleep(RETRY_DELAY).await;
         };
         Ok(WrapStream::NamedPipe(client))
     }
