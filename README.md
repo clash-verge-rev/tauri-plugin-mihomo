@@ -1,10 +1,10 @@
-# Tauri Plugin mihomo
+# Tauri Plugin Mihomo
 
 > [!IMPORTANT]
 >
 > 此仓库未发布到 crates.io 和 npm 中，请通过 git 使用
 >
-> ```
+> ```shell
 > # Cargo.toml
 > tauri-plugin-mihomo = { git = "https://github.com/clash-verge-rev/tauri-plugin-mihomo" }
 >
@@ -12,7 +12,7 @@
 > "tauri-plugin-mihomo-api": "git+https://github.com/clash-verge-rev/tauri-plugin-mihomo"
 > ```
 
-一个基于 Tauri 框架的调用 Mihomo API 插件，支持 Mihomo 的 HTTP 和 Socket 通信
+一个基于 Tauri 框架调用 Mihomo API 的插件，支持 Mihomo 的 HTTP 和 Socket 通信
 
 ### 测试 Mimoho 所有 API 的接口状态
 
@@ -38,7 +38,7 @@ cargo nextest run restart
 
 ##### 准备环境
 
-- [`prek`](https://github.com/j178/prek): ⚡ Better `pre-commit`, re-engineered in Rust
+- [`prek`](https://github.com/j178/prek): ⚡ Better `pre-commit`, re-engineered in Rust，**用于对 Git 提交前的检查**
 
 #### 构建前端文件
 
