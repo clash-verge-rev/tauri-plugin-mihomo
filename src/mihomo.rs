@@ -762,6 +762,7 @@ impl Mihomo {
         let body = json!({ "path": config_path });
         let client = self
             .build_request(Method::PUT, "/configs")?
+            .timeout(Duration::from_secs(60))
             .query(&[("force", force)])
             .json(&body);
         let response_result = self.send_by_protocol(client).await;
