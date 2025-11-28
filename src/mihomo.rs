@@ -485,12 +485,12 @@ impl Mihomo {
 
     /// 获取指定名称的代理组
     pub async fn get_group_by_name(&self, group_name: &str) -> Result<Proxy> {
-        let group_name = urlencoding::encode(group_name);
-        let client = self.build_request(Method::GET, &format!("/group/{group_name}"))?;
+        let group_name_encode = urlencoding::encode(group_name);
+        let client = self.build_request(Method::GET, &format!("/group/{group_name_encode}"))?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("get group failed, {}", e),
+                |e| format!("get group[{}] failed, {}", group_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -500,15 +500,15 @@ impl Mihomo {
 
     /// 对指定代理组进行延迟测试, 同时清理代理组已固定的节点
     pub async fn delay_group(&self, group_name: &str, test_url: &str, timeout: u32) -> Result<HashMap<String, u32>> {
-        let group_name = urlencoding::encode(group_name);
+        let group_name_encode = urlencoding::encode(group_name);
         let test_url = urlencoding::encode(test_url);
-        let suffix_url = format!("/group/{group_name}/delay?url={test_url}&timeout={timeout}");
+        let suffix_url = format!("/group/{group_name_encode}/delay?url={test_url}&timeout={timeout}");
         let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
         let client = self.build_request(Method::GET, &suffix_url)?.timeout(req_timeout);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("delay group failed, {}", e),
+                |e| format!("delay group[{}] failed, {}", group_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -532,12 +532,12 @@ impl Mihomo {
 
     /// 获取指定代理提供者信息
     pub async fn get_proxy_provider_by_name(&self, provider_name: &str) -> Result<ProxyProvider> {
-        let provider_name = urlencoding::encode(provider_name);
-        let client = self.build_request(Method::GET, &format!("/providers/proxies/{provider_name}"))?;
+        let provider_name_encode = urlencoding::encode(provider_name);
+        let client = self.build_request(Method::GET, &format!("/providers/proxies/{provider_name_encode}"))?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("get proxy provider failed, {}", e),
+                |e| format!("get proxy provider[{}] failed, {}", provider_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -547,12 +547,12 @@ impl Mihomo {
 
     /// 更新指定代理提供者信息
     pub async fn update_proxy_provider(&self, provider_name: &str) -> Result<()> {
-        let provider_name = urlencoding::encode(provider_name);
-        let client = self.build_request(Method::PUT, &format!("/providers/proxies/{provider_name}"))?;
+        let provider_name_encode = urlencoding::encode(provider_name);
+        let client = self.build_request(Method::PUT, &format!("/providers/proxies/{provider_name_encode}"))?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("update proxy provider failed, {}", e),
+                |e| format!("update proxy provider[{}] failed, {}", provider_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -562,13 +562,13 @@ impl Mihomo {
 
     /// 对指定代理提供者进行健康检查
     pub async fn healthcheck_proxy_provider(&self, provider_name: &str) -> Result<()> {
-        let provider_name = urlencoding::encode(provider_name);
-        let suffix_url = format!("/providers/proxies/{provider_name}/healthcheck");
+        let provider_name_encode = urlencoding::encode(provider_name);
+        let suffix_url = format!("/providers/proxies/{provider_name_encode}/healthcheck");
         let client = self.build_request(Method::GET, &suffix_url)?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("healthcheck proxy provider failed, {}", e),
+                |e| format!("healthcheck proxy provider[{}] failed, {}", provider_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -584,9 +584,9 @@ impl Mihomo {
         test_url: &str,
         timeout: u32,
     ) -> Result<ProxyDelay> {
-        let provider_name = urlencoding::encode(provider_name);
-        let proxy_name = urlencoding::encode(proxy_name);
-        let suffix_url = format!("/providers/proxies/{provider_name}/{proxy_name}/healthcheck",);
+        let provider_name_encode = urlencoding::encode(provider_name);
+        let proxy_name_encode = urlencoding::encode(proxy_name);
+        let suffix_url = format!("/providers/proxies/{provider_name_encode}/{proxy_name_encode}/healthcheck");
         let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
         let client = self
             .build_request(Method::GET, &suffix_url)?
@@ -624,12 +624,12 @@ impl Mihomo {
 
     /// 获取指定代理信息
     pub async fn get_proxy_by_name(&self, proxy_name: &str) -> Result<Proxy> {
-        let proxy_name = urlencoding::encode(proxy_name);
-        let client = self.build_request(Method::GET, &format!("/proxies/{proxy_name}"))?;
+        let proxy_name_encode = urlencoding::encode(proxy_name);
+        let client = self.build_request(Method::GET, &format!("/proxies/{proxy_name_encode}"))?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("get proxy failed, {}", e),
+                |e| format!("get proxy[{}] failed, {}", proxy_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -641,15 +641,15 @@ impl Mihomo {
     ///
     /// 一般为指定代理组下使用指定的代理节点 【代理组/节点】
     pub async fn select_node_for_group(&self, group_name: &str, node: &str) -> Result<()> {
-        let group_name = urlencoding::encode(group_name);
+        let group_name_encode = urlencoding::encode(group_name);
         let body = json!({ "name": node });
         let client = self
-            .build_request(Method::PUT, &format!("/proxies/{group_name}"))?
+            .build_request(Method::PUT, &format!("/proxies/{group_name_encode}"))?
             .json(&body);
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("select node for proxy failed, {}", e),
+                |e| format!("select node[{}] for group[{}] failed, {}", node, group_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -661,12 +661,12 @@ impl Mihomo {
     ///
     /// 一般用于自动选择的代理组（例如：URLTest 类型的代理组）下的节点
     pub async fn unfixed_proxy(&self, group_name: &str) -> Result<()> {
-        let group_name = urlencoding::encode(group_name);
-        let client = self.build_request(Method::DELETE, &format!("/proxies/{group_name}"))?;
+        let group_name_encode = urlencoding::encode(group_name);
+        let client = self.build_request(Method::DELETE, &format!("/proxies/{group_name_encode}"))?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("unfixed proxy failed, {}", e),
+                |e| format!("unfixed group[{}] failed, {}", group_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
@@ -678,8 +678,8 @@ impl Mihomo {
     ///
     /// 一般用于代理节点的延迟测试，也可传代理组名称（只会测试代理组下选中的代理节点）
     pub async fn delay_proxy_by_name(&self, proxy_name: &str, test_url: &str, timeout: u32) -> Result<ProxyDelay> {
-        let proxy_name = urlencoding::encode(proxy_name);
-        let suffix_url = format!("/proxies/{proxy_name}/delay");
+        let proxy_name_encode = urlencoding::encode(proxy_name);
+        let suffix_url = format!("/proxies/{proxy_name_encode}/delay");
         let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
         let client = self
             .build_request(Method::GET, &suffix_url)?
@@ -689,11 +689,15 @@ impl Mihomo {
         if !response.status().is_success() {
             match response.json::<ErrorResponse>().await {
                 Ok(err_res) => {
-                    log::debug!("delay proxy[{}] failed: {}", proxy_name, err_res.message);
+                    log::debug!(
+                        "delay proxy[{}], mark it timeout, response error message: {}",
+                        proxy_name,
+                        err_res.message
+                    );
                     return Ok(ProxyDelay { delay: 0 });
                 }
                 Err(e) => {
-                    ret_failed_resp!("delay proxy failed, {}", e);
+                    ret_failed_resp!("delay proxy[{}] failed, {}", proxy_name, e);
                 }
             }
         }
@@ -730,12 +734,12 @@ impl Mihomo {
 
     /// 更新规则提供者信息
     pub async fn update_rule_provider(&self, provider_name: &str) -> Result<()> {
-        let provider_name = urlencoding::encode(provider_name);
-        let client = self.build_request(Method::PUT, &format!("/providers/rules/{provider_name}"))?;
+        let provider_name_encode = urlencoding::encode(provider_name);
+        let client = self.build_request(Method::PUT, &format!("/providers/rules/{provider_name_encode}"))?;
         let response = self.send_by_protocol(client).await?;
         if !response.status().is_success() {
             let err_msg = response.json::<ErrorResponse>().await.map_or_else(
-                |e| format!("update rule provider failed, {}", e),
+                |e| format!("update rule provider[{}] failed, {}", provider_name, e),
                 |err_res| err_res.message.to_string(),
             );
             ret_failed_resp!("{}", err_msg);
