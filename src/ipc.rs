@@ -235,11 +235,10 @@ fn generate_socket_request(req: reqwest::Request) -> Result<String> {
 
 #[inline]
 fn generate_socket_response(header: String, body: String) -> Result<reqwest::Response> {
-    log::debug!("parsing socket response");
+    log::trace!("parsing socket response");
     let mut headers = [EMPTY_HEADER; 16];
     let mut res = httparse::Response::new(&mut headers);
     let response_str = format!("{header}{body}");
-    // println!("response str: {response_str:?}");
     let raw_response = response_str.as_bytes();
     match res.parse(raw_response) {
         Ok(httparse::Status::Complete(_)) => {
@@ -284,7 +283,7 @@ async fn read_header(reader: &mut BufReader<&mut WrapStream>) -> Result<String> 
             break;
         }
     }
-    log::debug!("read header done: {header:?}");
+    log::trace!("read header done: {header:?}");
 
     Ok(header)
 }
@@ -318,7 +317,7 @@ async fn read_chunked_data(reader: &mut BufReader<&mut WrapStream>) -> Result<St
         let mut crlf = String::new();
         reader.read_line(&mut crlf).await?;
     }
-    log::debug!("read chunked data done");
+    log::trace!("read chunked data done");
     Ok(String::from_utf8(body)?)
 }
 
@@ -620,7 +619,7 @@ impl IpcConnectionPool {
 
     async fn release_connection(&self, mut connection: IpcConnection) {
         let mut connections = self.connections.lock().await;
-        log::debug!(
+        log::trace!(
             "release connections, pool length: {}, available permits: {}",
             connections.len(),
             self.semaphore.available_permits()
@@ -631,7 +630,7 @@ impl IpcConnectionPool {
             self.semaphore.forget_permits(1);
             drop(connection);
         } else {
-            log::debug!("push connection to pool");
+            log::trace!("push connection to pool");
             connections.push_back(connection);
         }
     }
@@ -662,16 +661,15 @@ impl LocalSocket for RequestBuilder {
 
         let pool = IpcConnectionPool::global()?;
         let (mut conn, _permit) = pool.get_connection(socket_path).await?;
-        // let mut stream = connect_to_socket(socket_path).await?;
 
         let process = async move {
-            log::debug!("building socket request");
+            log::trace!("building socket request");
             let req_str = generate_socket_request(request)?;
-            log::debug!("request string: {req_str:?}");
+            log::trace!("request string: {req_str:?}");
             conn.writable().await?;
-            log::debug!("send request");
+            log::trace!("send request");
             conn.write_all(req_str.as_bytes()).await?;
-            log::debug!("wait for response");
+            log::trace!("wait for response");
             conn.readable().await?;
 
             let mut reader = BufReader::new(&mut conn.stream);
@@ -694,10 +692,10 @@ impl LocalSocket for RequestBuilder {
             // 读取 body
             log::debug!("read body");
             let body = if is_chunked {
-                log::debug!("parse chunked data");
+                log::trace!("parse chunked data");
                 read_chunked_data(&mut reader).await?
             } else if let Some(content_length) = content_length {
-                log::debug!("content length: {content_length}");
+                log::trace!("content length: {content_length}");
                 let mut body_buf = vec![0u8; content_length];
                 reader.read_exact(&mut body_buf).await?;
                 String::from_utf8_lossy(&body_buf).to_string()
@@ -706,7 +704,6 @@ impl LocalSocket for RequestBuilder {
                 String::new()
             };
             log::debug!("receive and parse response success");
-            // reader.shutdown().await?;
             pool.release_connection(conn).await;
             generate_socket_response(header, body)
         };
