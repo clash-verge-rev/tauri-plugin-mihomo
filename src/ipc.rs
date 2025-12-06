@@ -178,7 +178,7 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
 
     #[cfg(windows)]
     {
-        const MAX_RETRIES: usize = 3;
+        let mut max_retry_count = 3;
         const RETRY_DELAY: Duration = Duration::from_millis(125);
 
         let client = loop {
@@ -187,11 +187,13 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
                 Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => (),
                 Err(e) => {
                     log::warn!("failed to connect to named pipe: {socket_path}, {e}");
-                    if MAX_RETRIES == 0 {
-                        return Err(Error::FailedResponse(format!(
-                            "Failed to connect to named pipe: {socket_path}, {e}"
+                    if max_retry_count == 0 {
+                        return Err(Error::Io(std::io::Error::new(
+                            std::io::ErrorKind::NotFound,
+                            format!("Failed to connect to named pipe: {socket_path}, {e}"),
                         )));
                     }
+                    max_retry_count -= 1;
                 }
             }
             sleep(RETRY_DELAY).await;
