@@ -527,6 +527,7 @@ pub enum ProxyType {
     Mieru,
     AnyTLS,
     Relay,
+    Sudoku,
     Selector,
     Fallback,
     URLTest,
