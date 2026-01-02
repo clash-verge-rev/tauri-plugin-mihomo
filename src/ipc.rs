@@ -542,6 +542,7 @@ impl IpcConnectionPool {
             before,
             connections.len()
         );
+        drop(connections);
     }
 
     #[inline]
@@ -593,18 +594,16 @@ impl IpcConnectionPool {
 
     async fn acquire_or_create_connection(&self, socket_path: &str) -> Result<IpcConnection> {
         // 从池中获取连接并检查其有效性
-        if let Some(conn) = self.connections.lock().await.pop_front() {
-            log::debug!("get connection from pool successfully");
-            if !conn.is_valid() {
-                // 如果连接失效，则重新建立连接
-                log::warn!("connection from pool is not available, drop it and create new connection");
-                drop(conn);
-                return Self::create_connection(socket_path).await;
-            }
-            return Ok(conn);
-        }
+        let Some(conn) = self.connections.lock().await.pop_front() else {
+            log::warn!("connection from pool is not available, drop it and create new connection");
+            return Self::create_connection(socket_path).await;
+        };
 
-        let conn = Self::create_connection(socket_path).await?;
+        log::debug!("get connection from pool successfully");
+        // 如果连接失效，则重新建立连接
+        if !conn.is_valid() {
+            return Self::create_connection(socket_path).await;
+        }
         Ok(conn)
     }
 

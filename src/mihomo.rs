@@ -332,6 +332,7 @@ impl Mihomo {
         log::debug!("manage_ids: {:?}", manager.keys());
         manager.clear();
         log::debug!("clear all done, manager_ids: {:?}", manager.keys());
+        drop(manager);
         Ok(())
     }
 

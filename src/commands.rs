@@ -13,6 +13,7 @@ pub(crate) async fn update_controller(
     let mut mihomo = state.write().await;
     mihomo.update_external_host(host);
     mihomo.update_external_port(port);
+    drop(mihomo);
     Ok(())
 }
 
