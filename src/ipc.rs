@@ -257,7 +257,7 @@ fn generate_socket_response(header: String, body: String) -> Result<reqwest::Res
             //     let mut file = std::fs::File::create("body.json")?;
             //     file.write_all(body.as_bytes())?;
             // }
-            let response = res_builder.body(body.to_string())?;
+            let response = res_builder.body(body)?;
             Ok(reqwest::Response::from(response))
         }
         Ok(httparse::Status::Partial) => {
@@ -457,7 +457,7 @@ impl IpcConnection {
     }
 
     #[inline]
-    fn is_valid(&mut self) -> bool {
+    fn is_valid(&self) -> bool {
         self.stream.is_available().unwrap_or_default()
     }
 }
@@ -593,7 +593,7 @@ impl IpcConnectionPool {
 
     async fn acquire_or_create_connection(&self, socket_path: &str) -> Result<IpcConnection> {
         // 从池中获取连接并检查其有效性
-        if let Some(mut conn) = self.connections.lock().await.pop_front() {
+        if let Some(conn) = self.connections.lock().await.pop_front() {
             log::debug!("get connection from pool successfully");
             if !conn.is_valid() {
                 // 如果连接失效，则重新建立连接
