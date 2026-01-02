@@ -8,7 +8,7 @@ use ts_rs::TS;
 
 use crate::ipc::WrapStream;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
     #[default]
@@ -32,7 +32,7 @@ impl Display for Protocol {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export, rename_all = "camelCase")]
 #[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct BaseConfig {
@@ -76,7 +76,7 @@ pub struct BaseConfig {
     pub disable_keep_alive: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export, rename_all = "camelCase")]
 #[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct TunConfig {
@@ -242,7 +242,7 @@ pub struct TunConfig {
     pub sendmsgx: Option<bool>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export, rename_all = "camelCase")]
 #[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct TuicServer {
@@ -294,7 +294,7 @@ pub struct TuicServer {
     pub mux_option: Option<MuxOption>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct MuxOption {
     #[ts(optional)]
@@ -306,7 +306,7 @@ pub struct MuxOption {
     pub brutal: Option<BrutalOption>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct BrutalOption {
     pub enabled: bool,
@@ -320,7 +320,7 @@ pub struct BrutalOption {
     pub down: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
@@ -344,7 +344,7 @@ impl Display for LogLevel {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export, rename_all = "camelCase")]
 #[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct GeoXUrl {
@@ -354,7 +354,7 @@ pub struct GeoXUrl {
     pub geo_site: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum FindProcessMode {
@@ -364,14 +364,14 @@ pub enum FindProcessMode {
 }
 
 /// mihomo version
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct MihomoVersion {
     pub meta: bool,
     pub version: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum CoreUpdaterChannel {
     #[serde(rename = "release")]
@@ -415,7 +415,7 @@ impl Display for ClashMode {
 }
 
 /// tun stack enum
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum TunStack {
     Mixed,
@@ -436,13 +436,13 @@ impl Display for TunStack {
 }
 
 /// group proxies
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Groups {
     pub proxies: Vec<Proxy>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Proxy {
@@ -502,7 +502,7 @@ pub struct Proxy {
     pub routing_mark: i8,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum ProxyType {
     Direct,
@@ -534,14 +534,14 @@ pub enum ProxyType {
     LoadBalance,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Extra {
     pub alive: bool,
     pub history: Vec<DelayHistory>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct DelayHistory {
     pub time: String,
@@ -549,7 +549,7 @@ pub struct DelayHistory {
 }
 
 /// proxies
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Proxies {
     pub proxies: HashMap<String, Proxy>,
@@ -558,26 +558,26 @@ pub struct Proxies {
 /// proxy delay result
 ///
 /// displays a message if it times out, otherwise it only displays the delay
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct ProxyDelay {
     pub delay: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct ProxyProviders {
     pub providers: HashMap<String, ProxyProvider>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum ProviderType {
     Proxy,
     Rule,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum VehicleType {
     File,
@@ -586,7 +586,7 @@ pub enum VehicleType {
     Inline,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyProvider {
@@ -601,7 +601,7 @@ pub struct ProxyProvider {
     pub subscription_info: Option<SubScriptionInfo>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "PascalCase")]
 pub struct SubScriptionInfo {
@@ -616,13 +616,13 @@ pub struct SubScriptionInfo {
 }
 
 /// rules
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Rules {
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Rule {
     #[serde(rename = "type")]
@@ -632,7 +632,7 @@ pub struct Rule {
     pub size: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum RuleType {
     Domain,
@@ -669,13 +669,13 @@ pub enum RuleType {
     NOT,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct RuleProviders {
     pub providers: HashMap<String, RuleProvider>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum RuleBehavior {
     Domain,
@@ -684,7 +684,7 @@ pub enum RuleBehavior {
     Classical,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum RuleFormat {
     #[serde(rename = "YamlRule")]
@@ -695,7 +695,7 @@ pub enum RuleFormat {
     Mrs,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleProvider {
@@ -710,7 +710,7 @@ pub struct RuleProvider {
 }
 
 /// connections
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Connections {
@@ -722,7 +722,7 @@ pub struct Connections {
     pub memory: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Connection {
@@ -738,7 +738,7 @@ pub struct Connection {
     pub rule_payload: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum Network {
     #[serde(rename = "tcp")]
@@ -749,7 +749,7 @@ pub enum Network {
     ALLNet,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum ConnectionType {
     HTTP,
@@ -784,7 +784,7 @@ pub enum ConnectionType {
     INNER,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub enum DNSMode {
     #[serde(rename = "normal")]
@@ -797,7 +797,7 @@ pub enum DNSMode {
     Hosts,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionMetaData {
@@ -845,7 +845,7 @@ pub struct ConnectionMetaData {
     pub sniff_host: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Traffic {
     #[ts(type = "number")]
@@ -854,14 +854,14 @@ pub struct Traffic {
     pub down: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Memory {
     pub inuse: u32,
     pub oslimit: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct Log {
     #[serde(rename = "type")]
@@ -870,18 +870,18 @@ pub struct Log {
 }
 
 // ------------- use in rust, no need export to typescript -----------------
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 pub struct ErrorResponse {
     pub message: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 pub struct CloseFrame {
     pub code: u16,
     pub reason: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "data")]
 pub enum WebSocketMessage {
     Text(String),
