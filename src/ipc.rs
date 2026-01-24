@@ -21,7 +21,7 @@ use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     sync::{Mutex, Semaphore, SemaphorePermit},
-    time::{sleep, timeout},
+    time::timeout,
 };
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
@@ -135,45 +135,52 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
     #[cfg(unix)]
     {
         use std::io::ErrorKind;
+        const MAX_RETRIES: u32 = 3;
+        const BASE_DELAY: Duration = Duration::from_millis(25);
 
-        const MAX_RETRIES: usize = 3;
-        const RETRY_DELAY: Duration = Duration::from_millis(125);
-
-        let socket_path_buf = std::path::Path::new(socket_path);
         let mut last_err: Option<std::io::Error> = None;
 
         for attempt in 0..=MAX_RETRIES {
-            if !socket_path_buf.exists() {
-                last_err = Some(std::io::Error::new(
-                    ErrorKind::NotFound,
-                    format!("socket path: {socket_path} not found"),
-                ));
-            } else {
-                match UnixStream::connect(socket_path).await {
-                    Ok(stream) => return Ok(WrapStream::Unix(stream)),
-                    Err(e) => {
-                        last_err = Some(e);
-                        log::warn!(
-                            "failed to connect to socket: {socket_path} (attempt {attempt}), {}",
-                            last_err.as_ref().map_or("unknown".to_string(), |e| e.to_string())
-                        );
-                    }
+            let connect_fut = tokio::time::timeout(Duration::from_millis(200), UnixStream::connect(socket_path));
+            let connection_result = match connect_fut.await {
+                Ok(result) => result,
+                Err(_) => {
+                    log::warn!("Socket connect attempt {attempt} timed out");
+                    last_err = Some(std::io::Error::new(ErrorKind::TimedOut, "connect timeout"));
+                    continue;
                 }
+            };
+
+            match connection_result {
+                Ok(stream) => return Ok(WrapStream::Unix(stream)),
+                Err(e) => match e.kind() {
+                    ErrorKind::PermissionDenied => {
+                        log::error!("Permission denied for socket: {socket_path}");
+                        return Err(Error::Io(e));
+                    }
+                    _ => {
+                        log::warn!("Socket connect attempt {attempt} failed: {e}");
+                        last_err = Some(e);
+                    }
+                },
             }
 
             if attempt < MAX_RETRIES {
-                sleep(RETRY_DELAY).await;
+                let delay = BASE_DELAY * 2u32.pow(attempt);
+                let jitter = Duration::from_millis(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| (d.as_nanos() % 25) as u64)
+                        .unwrap_or(0),
+                );
+
+                tokio::time::sleep(delay + jitter).await;
             }
         }
 
-        if let Some(err) = last_err {
-            log::error!("socket connect retries exhausted: {socket_path}, {err}");
-            Err(Error::Io(err))
-        } else {
-            Err(Error::Io(std::io::Error::other(format!(
-                "socket connect retries exhausted: {socket_path}"
-            ))))
-        }
+        Err(Error::Io(
+            last_err.unwrap_or_else(|| std::io::Error::other("Retries exhausted")),
+        ))
     }
 
     #[cfg(windows)]
