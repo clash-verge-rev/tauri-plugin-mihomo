@@ -203,7 +203,7 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
                     max_retry_count -= 1;
                 }
             }
-            sleep(RETRY_DELAY).await;
+            tokio::time::sleep(RETRY_DELAY).await;
         };
         Ok(WrapStream::NamedPipe(client))
     }
