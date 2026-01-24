@@ -572,10 +572,10 @@ impl IpcConnectionPool {
                     self.semaphore.add_permits(1);
                     match self.semaphore.acquire().await {
                         Ok(permit) => Ok(permit),
-                        Err(_) => {
+                        Err(e) => {
                             log::error!("failed to acquire permit, forget permit");
                             self.semaphore.forget_permits(1);
-                            Err(Error::ConnectionFailed)
+                            Err(Error::ConnectionFailed(e.to_string()))
                         }
                     }
                 }
@@ -621,7 +621,7 @@ impl IpcConnectionPool {
         );
         match connect_to_socket(socket_path).await {
             Ok(stream) => Ok(IpcConnection::new(stream)),
-            Err(_) => Err(Error::ConnectionFailed),
+            Err(e) => Err(Error::ConnectionFailed(e.to_string())),
         }
     }
 

@@ -38,8 +38,8 @@ pub enum Error {
     ConnectionPoolInitFailed,
     #[error("Connection pool is full")]
     ConnectionPoolFull,
-    #[error("Connection failed")]
-    ConnectionFailed,
+    #[error("Connection failed, {0}")]
+    ConnectionFailed(String),
     #[error("Connection lost")]
     ConnectionLost,
 }
