@@ -1,6 +1,6 @@
 use tauri_plugin_mihomo::{
     Result, failed_resp,
-    models::{ProxyType, VehicleType},
+    models::{VehicleType, proxy_types},
 };
 
 use crate::common::{TEST_URL, TIMEOUT};
@@ -43,7 +43,7 @@ async fn mihomo_group_select_node() -> Result<()> {
     let selector_group = groups
         .proxies
         .iter()
-        .find(|i| matches!(i.proxy_type, ProxyType::Selector))
+        .find(|i| i.proxy_type == proxy_types::SELECTOR)
         .ok_or(failed_resp!("not fount selector group"))?;
     #[allow(clippy::unwrap_used)]
     let origin_now = selector_group.now.clone().unwrap();
@@ -83,7 +83,7 @@ async fn mihomo_group_unfixed() -> Result<()> {
     let urlmihomo_group = groups
         .proxies
         .iter()
-        .find(|i| matches!(i.proxy_type, ProxyType::URLTest))
+        .find(|i| i.proxy_type == proxy_types::URL_TEST)
         .ok_or(failed_resp!("not fount url test group"))?;
     println!("[{}], before fixed: {:?}", urlmihomo_group.name, urlmihomo_group.fixed);
 
