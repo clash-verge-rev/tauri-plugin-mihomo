@@ -28,6 +28,9 @@ log = "0.4"
 urlencoding = "2.1"
 ts-rs = "11.0"
 pin-project = "1.1"
+hyper = { version = "1.8" }
+bytes = "1.11"
+http-body-util = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = "0.61"
