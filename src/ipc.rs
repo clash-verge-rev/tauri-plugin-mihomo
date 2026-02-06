@@ -18,7 +18,7 @@ use reqwest::RequestBuilder;
 #[cfg(unix)]
 use tokio::net::UnixStream;
 #[cfg(windows)]
-use tokio::net::windows::named_pipe::{ClientaOptions, NamedPipeClient};
+use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::{Semaphore, SemaphorePermit},
