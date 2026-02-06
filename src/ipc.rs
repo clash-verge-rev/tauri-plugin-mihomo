@@ -431,14 +431,14 @@ impl IpcConnectionPool {
             let mut interval = tokio::time::interval(pool.config.health_check_interval);
             loop {
                 interval.tick().await;
-                pool.cleanup_idle_connections().await;
+                pool.cleanup_idle_connections();
             }
         });
     }
 
     // 清理空闲连接
     #[inline]
-    async fn cleanup_idle_connections(&self) {
+    fn cleanup_idle_connections(&self) {
         let now = Instant::now();
         let min_to_keep = self.config.min_connections;
 
@@ -535,7 +535,7 @@ impl IpcConnectionPool {
         }
     }
 
-    pub async fn clear_pool(&self) {
+    pub fn clear_pool(&self) {
         while self.connections.pop().is_some() {}
         log::debug!("IpcConnectionPool cleared");
     }
@@ -543,10 +543,8 @@ impl IpcConnectionPool {
 
 impl Drop for IpcConnectionPool {
     fn drop(&mut self) {
-        tauri::async_runtime::block_on(async move {
-            log::debug!("IpcConnectionPool is being dropped");
-            self.clear_pool().await;
-        });
+        log::debug!("IpcConnectionPool is being dropped");
+        self.clear_pool();
     }
 }
 

@@ -58,7 +58,7 @@ impl Mihomo {
     pub fn update_socket_path<S: Into<String>>(&mut self, socket_path: S) -> Result<()> {
         self.socket_path = Some(socket_path.into());
         let pool = IpcConnectionPool::global()?;
-        tauri::async_runtime::block_on(pool.clear_pool());
+        pool.clear_pool();
         Ok(())
     }
 
@@ -774,7 +774,7 @@ impl Mihomo {
         if matches!(self.protocol, Protocol::LocalSocket)
             && let Ok(pool) = IpcConnectionPool::global()
         {
-            pool.clear_pool().await;
+            pool.clear_pool();
         }
         let response = response_result?;
         if !response.status().is_success() {
