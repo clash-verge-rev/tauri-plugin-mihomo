@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     ops::{Deref, DerefMut},
     pin::Pin,
     sync::{Arc, OnceLock},
@@ -8,6 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use crossbeam::queue::SegQueue;
 use http_body_util::{BodyExt, Full};
 use hyper::{
     client::conn::http1,
@@ -18,10 +18,10 @@ use reqwest::RequestBuilder;
 #[cfg(unix)]
 use tokio::net::UnixStream;
 #[cfg(windows)]
-use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
+use tokio::net::windows::named_pipe::{ClientaOptions, NamedPipeClient};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::{Mutex, Semaphore, SemaphorePermit},
+    sync::{Semaphore, SemaphorePermit},
     time::timeout,
 };
 #[cfg(windows)]
@@ -389,7 +389,7 @@ impl IpcConnection {
 // IPC 连接池
 #[derive(Clone)]
 pub struct IpcConnectionPool {
-    connections: Arc<Mutex<VecDeque<IpcConnection>>>,
+    connections: Arc<SegQueue<IpcConnection>>,
     semaphore: Arc<Semaphore>,
     config: IpcPoolConfig,
 }
@@ -402,7 +402,7 @@ impl IpcConnectionPool {
         let pool = IpcConnectionPool {
             semaphore: Arc::new(Semaphore::new(config.max_connections)),
             config,
-            connections: Arc::new(Mutex::new(VecDeque::new())),
+            connections: Arc::new(SegQueue::new()),
         };
         // 启动清理空闲连接的任务线程
         pool.start_clear_idle_conns_task();
@@ -439,34 +439,28 @@ impl IpcConnectionPool {
     // 清理空闲连接
     #[inline]
     async fn cleanup_idle_connections(&self) {
-        log::debug!("cleanup idle connections");
         let now = Instant::now();
-
-        // 移除超时空闲连接，但保留最小连接数
         let min_to_keep = self.config.min_connections;
 
-        let mut connections = self.connections.lock().await;
-        let before = connections.len();
-        if before < min_to_keep {
-            log::debug!("connections less than min_to_keep, skip cleanup");
-            return;
-        }
+        let mut total_checked = 0;
+        let mut kept = 0;
 
-        let mut kept_connections = 0;
-        connections.retain(|conn| {
-            if kept_connections < min_to_keep || now.duration_since(conn.last_used) <= self.config.idle_timeout {
-                kept_connections += 1;
-                true
+        let approx_len = self.connections.len();
+
+        for _ in 0..approx_len {
+            if let Some(conn) = self.connections.pop() {
+                total_checked += 1;
+                let is_idle_timeout = now.duration_since(conn.last_used) > self.config.idle_timeout;
+
+                if kept < min_to_keep || !is_idle_timeout {
+                    self.connections.push(conn);
+                    kept += 1;
+                }
             } else {
-                false
+                break;
             }
-        });
-        log::debug!(
-            "cleanup connections done, before: {}, after: {}",
-            before,
-            connections.len()
-        );
-        drop(connections);
+        }
+        log::debug!("Cleanup done: checked {}, kept {}", total_checked, kept);
     }
 
     #[inline]
@@ -518,17 +512,16 @@ impl IpcConnectionPool {
 
     async fn acquire_or_create_connection(&self, socket_path: &str) -> Result<IpcConnection> {
         // 从池中获取连接并检查其有效性
-        let Some(conn) = self.connections.lock().await.pop_front() else {
-            log::warn!("connection from pool is not available, drop it and create new connection");
-            return Self::create_connection(socket_path).await;
-        };
-
-        log::debug!("get connection from pool successfully");
-        // 如果连接失效，则重新建立连接
-        if !conn.is_valid() {
-            return Self::create_connection(socket_path).await;
+        while let Some(conn) = self.connections.pop() {
+            log::debug!("Attempting to reuse connection from pool");
+            if conn.is_valid() {
+                return Ok(conn);
+            }
+            // log::debug!("Pooled connection is invalid, dropping...");
         }
-        Ok(conn)
+
+        log::trace!("Pool empty, creating new connection");
+        Self::create_connection(socket_path).await
     }
 
     async fn create_connection(socket_path: &str) -> Result<IpcConnection> {
@@ -543,8 +536,8 @@ impl IpcConnectionPool {
     }
 
     pub async fn clear_pool(&self) {
-        let mut connections = self.connections.lock().await;
-        connections.retain(|_conn| false);
+        while self.connections.pop().is_some() {}
+        log::debug!("IpcConnectionPool cleared");
     }
 }
 
