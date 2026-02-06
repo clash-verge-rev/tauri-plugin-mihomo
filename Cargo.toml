@@ -31,6 +31,7 @@ pin-project = "1.1"
 hyper = { version = "1.8" }
 bytes = "1.11"
 http-body-util = "0.1"
+crossbeam = "0.8"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
