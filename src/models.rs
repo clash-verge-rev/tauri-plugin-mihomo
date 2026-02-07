@@ -502,36 +502,37 @@ pub struct Proxy {
     pub routing_mark: i8,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum ProxyType {
-    Direct,
-    Reject,
-    RejectDrop,
-    Compatible,
-    Pass,
-    Dns,
-    Shadowsocks,
-    ShadowsocksR,
-    Snell,
-    Socks5,
-    Http,
-    Vmess,
-    Vless,
-    Trojan,
-    Hysteria,
-    Hysteria2,
-    WireGuard,
-    Tuic,
-    Ssh,
-    Mieru,
-    AnyTLS,
-    Relay,
-    Sudoku,
-    Selector,
-    Fallback,
-    URLTest,
-    LoadBalance,
+pub type ProxyType = String;
+
+pub mod proxy_types {
+    pub const DIRECT: &str = "Direct";
+    pub const REJECT: &str = "Reject";
+    pub const REJECT_DROP: &str = "RejectDrop";
+    pub const COMPATIBLE: &str = "Compatible";
+    pub const PASS: &str = "Pass";
+    pub const DNS: &str = "Dns";
+    pub const SHADOWSOCKS: &str = "Shadowsocks";
+    pub const SHADOWSOCKS_R: &str = "ShadowsocksR";
+    pub const SNELL: &str = "Snell";
+    pub const SOCKS5: &str = "Socks5";
+    pub const HTTP: &str = "Http";
+    pub const VMESS: &str = "Vmess";
+    pub const VLESS: &str = "Vless";
+    pub const TROJAN: &str = "Trojan";
+    pub const HYSTERIA: &str = "Hysteria";
+    pub const HYSTERIA2: &str = "Hysteria2";
+    pub const WIRE_GUARD: &str = "WireGuard";
+    pub const TUIC: &str = "Tuic";
+    pub const SSH: &str = "Ssh";
+    pub const MIERU: &str = "Mieru";
+    pub const ANY_TLS: &str = "AnyTLS";
+    pub const RELAY: &str = "Relay";
+    pub const SUDOKU: &str = "Sudoku";
+    pub const MASQUE: &str = "MASQUE";
+    pub const SELECTOR: &str = "Selector";
+    pub const FALLBACK: &str = "Fallback";
+    pub const URL_TEST: &str = "URLTest";
+    pub const LOAD_BALANCE: &str = "LoadBalance";
 }
 
 #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]

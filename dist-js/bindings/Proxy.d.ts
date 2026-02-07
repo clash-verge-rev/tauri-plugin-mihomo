@@ -1,6 +1,5 @@
 import type { DelayHistory } from "./DelayHistory";
 import type { Extra } from "./Extra";
-import type { ProxyType } from "./ProxyType";
 export type Proxy = {
     all?: Array<string>;
     expectedStatus?: string;
@@ -18,7 +17,7 @@ export type Proxy = {
     name: string;
     udp: boolean;
     uot: boolean;
-    type: ProxyType;
+    type: string;
     xudp: boolean;
     tfo: boolean;
     mptcp: boolean;
