@@ -525,7 +525,7 @@ pub enum ProxyType {
     Tuic,
     Ssh,
     Mieru,
-    MASQUE,
+    Masque,
     AnyTLS,
     Relay,
     Sudoku,
