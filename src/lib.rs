@@ -7,15 +7,12 @@ use tauri::{
 
 mod commands;
 mod error;
-mod ipc;
 mod mihomo;
 pub mod models;
-mod utils;
+mod wrap_stream;
 
 pub use error::{Error, Result};
 
-pub(crate) use crate::ipc::IpcPoolConfig;
-pub use crate::ipc::{IpcConnectionPool, IpcPoolConfigBuilder, RejectPolicy};
 use crate::models::Protocol;
 
 /// Extensions to [`tauri::App`], [`tauri::AppHandle`] and [`tauri::Window`] to access the mihomo APIs.
@@ -36,7 +33,6 @@ pub struct Builder {
     external_port: Option<u16>,
     secret: Option<String>,
     socket_path: Option<String>,
-    pool_config: Option<IpcPoolConfig>,
 }
 
 impl Default for Builder {
@@ -47,7 +43,6 @@ impl Default for Builder {
             external_port: Some(9090),
             secret: None,
             socket_path: None,
-            pool_config: None,
         }
     }
 }
@@ -82,18 +77,12 @@ impl Builder {
         self
     }
 
-    pub fn pool_config(mut self, pool_config: IpcPoolConfig) -> Self {
-        self.pool_config = Some(pool_config);
-        self
-    }
-
     pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
         let protocol = self.protocol;
         let external_host = self.external_host;
         let external_port = self.external_port;
         let secret = self.secret;
         let socket_path = self.socket_path;
-        let pool_config = self.pool_config.unwrap_or_default();
 
         PluginBuilder::new("mihomo")
             .invoke_handler(tauri::generate_handler![
@@ -146,14 +135,6 @@ impl Builder {
                 // commands::ws_send,
             ])
             .setup(move |app, _api| {
-                // 初始化连接池
-                IpcConnectionPool::init(pool_config).map_err(|e| {
-                    tauri::Error::PluginInitialization(
-                        "Failed to initialize IPC connection pool: {}".to_string(),
-                        e.to_string(),
-                    )
-                })?;
-
                 app.manage(RwLock::new(Mihomo {
                     protocol,
                     external_host,

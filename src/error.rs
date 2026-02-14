@@ -1,6 +1,6 @@
 use serde::{Serialize, ser::Serializer};
 
-use crate::models::ConnectionId;
+use crate::models::WebSocketConnectionId;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -13,35 +13,21 @@ pub enum Error {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error("Websocket error: {0}")]
-    Websocket(String),
-    #[error("Connection not found for the given id: {0}")]
-    ConnectionNotFound(ConnectionId),
+    WebSocket(String),
+    #[error("Websocket connection not found for the given id: {0}")]
+    WebSocketConnectionNotFound(WebSocketConnectionId),
     #[error(transparent)]
     InvalidHeaderValue(#[from] tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue),
     #[error(transparent)]
     InvalidHeaderName(#[from] tokio_tungstenite::tungstenite::http::header::InvalidHeaderName),
-    #[error("IPC send timeout")]
-    Timeout(#[from] tokio::time::error::Elapsed),
     #[error("The {0} method not supported")]
     MethodNotSupported(String),
     #[error("Failed Response, {0}")]
     FailedResponse(String),
     #[error(transparent)]
     HttpError(#[from] http::Error),
-    #[error("Http Parse failed, {0}")]
-    HttpParseError(String),
     #[error("Parse error, {0}")]
     ParseError(String),
-    #[error("Connection pool not initialized")]
-    ConnectionPoolNotInitialized,
-    #[error("Connection pool init failed")]
-    ConnectionPoolInitFailed,
-    #[error("Connection pool is full")]
-    ConnectionPoolFull,
-    #[error("Connection failed, {0}")]
-    ConnectionFailed(String),
-    #[error("Connection lost")]
-    ConnectionLost,
 }
 
 impl Serialize for Error {
@@ -57,7 +43,7 @@ impl Serialize for Error {
 impl From<tokio_tungstenite::tungstenite::Error> for Error {
     #[inline]
     fn from(e: tokio_tungstenite::tungstenite::Error) -> Self {
-        crate::Error::Websocket(e.to_string())
+        crate::Error::WebSocket(e.to_string())
     }
 }
 
