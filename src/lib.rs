@@ -135,14 +135,16 @@ impl Builder {
                 // commands::ws_send,
             ])
             .setup(move |app, _api| {
-                app.manage(RwLock::new(Mihomo {
+                let mihomo = Mihomo {
                     protocol,
                     external_host,
                     external_port,
                     secret,
                     socket_path,
                     connection_manager: Default::default(),
-                }));
+                };
+                mihomo.start_ws_connections_watcher();
+                app.manage(RwLock::new(mihomo));
 
                 Ok(())
             })

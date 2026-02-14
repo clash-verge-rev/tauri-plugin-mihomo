@@ -55,6 +55,19 @@ impl Mihomo {
         self.secret = secret;
     }
 
+    pub fn start_ws_connections_watcher(&self) {
+        let manager = self.connection_manager.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_millis(1000));
+            loop {
+                let ids_map = manager.0.read().await;
+                let ids: Vec<&u32> = ids_map.keys().collect();
+                log::trace!("manager websocket connection ids: {ids:?}",);
+                interval.tick().await;
+            }
+        });
+    }
+
     #[inline]
     fn get_req_url(&self, suffix_url: &str) -> Result<String> {
         let suffix_url = suffix_url.trim_start_matches("/");
@@ -204,9 +217,7 @@ impl Mihomo {
                 tokio::spawn(async move {
                     let manager_ = Arc::clone(&manager);
                     loop {
-                        let ids: Vec<u32> = manager_.0.read().await.keys().cloned().collect();
-                        log::trace!("waiting for websocket message, connection_id: {id}, manager_ids: {ids:?}",);
-                        if !ids.contains(&id) {
+                        if manager_.0.read().await.keys().find(|&key| key == &id).is_none() {
                             log::debug!("connection [{id}] is removed from manager");
                             break;
                         }
@@ -248,9 +259,7 @@ impl Mihomo {
                     tokio::spawn(async move {
                         let manager_ = Arc::clone(&manager);
                         loop {
-                            let ids: Vec<u32> = manager_.0.read().await.keys().cloned().collect();
-                            log::trace!("waiting for websocket message, connection_id: {id}, manager_ids: {ids:?}",);
-                            if !ids.contains(&id) {
+                            if manager_.0.read().await.keys().find(|&key| key == &id).is_none() {
                                 log::debug!("connection [{id}] is removed from manager");
                                 break;
                             }
