@@ -217,7 +217,7 @@ impl Mihomo {
                 tokio::spawn(async move {
                     let manager_ = Arc::clone(&manager);
                     loop {
-                        if manager_.0.read().await.keys().find(|&key| key == &id).is_none() {
+                        if !manager_.0.read().await.keys().any(|key| key == &id) {
                             log::debug!("connection [{id}] is removed from manager");
                             break;
                         }
@@ -259,7 +259,7 @@ impl Mihomo {
                     tokio::spawn(async move {
                         let manager_ = Arc::clone(&manager);
                         loop {
-                            if manager_.0.read().await.keys().find(|&key| key == &id).is_none() {
+                            if !manager_.0.read().await.keys().any(|key| key == &id) {
                                 log::debug!("connection [{id}] is removed from manager");
                                 break;
                             }

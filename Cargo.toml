@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-mihomo"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["oomeow"]
 description = "Tauri plugin for invoke Mihomo API"
 edition = "2024"
