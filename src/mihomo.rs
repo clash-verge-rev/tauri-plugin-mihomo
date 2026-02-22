@@ -56,7 +56,7 @@ impl Mihomo {
     }
 
     pub fn start_ws_connections_watcher(&self) {
-        let manager = self.connection_manager.clone();
+        let manager = Arc::clone(&self.connection_manager);
         tauri::async_runtime::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(1000));
             loop {
