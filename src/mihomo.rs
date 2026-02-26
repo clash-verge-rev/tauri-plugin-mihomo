@@ -60,10 +60,10 @@ impl Mihomo {
         tauri::async_runtime::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(1000));
             loop {
+                interval.tick().await;
                 let ids_map = manager.0.read().await;
                 let ids: Vec<&u32> = ids_map.keys().collect();
                 log::trace!("manager websocket connection ids: {ids:?}",);
-                interval.tick().await;
             }
         });
     }
