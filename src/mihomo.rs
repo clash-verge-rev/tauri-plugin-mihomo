@@ -16,7 +16,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    Error, Result,
+    DOWNLOAD_FILE_TIMEOUT, Error, Result,
     models::{
         BaseConfig, CloseFrame, ConnectionManager, Connections, CoreUpdaterChannel, ErrorResponse, Groups, LogLevel,
         MihomoVersion, Protocol, Proxies, Proxy, ProxyDelay, ProxyProvider, ProxyProviders, RuleProviders, Rules,
@@ -25,14 +25,13 @@ use crate::{
     ret_failed_resp,
 };
 
-const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-
 pub struct Mihomo {
     pub protocol: Protocol,
     pub external_host: Option<String>,
     pub external_port: Option<u16>,
     pub secret: Option<String>,
     pub socket_path: Option<String>,
+    pub request_timeout: Duration,
     pub connection_manager: Arc<ConnectionManager>,
 }
 
@@ -107,7 +106,7 @@ impl Mihomo {
         let url = self.get_req_url(suffix_url)?;
         let headers = self.get_req_headers()?;
         let client = match self.protocol {
-            Protocol::Http => reqwest::ClientBuilder::new().build()?,
+            Protocol::Http => reqwest::ClientBuilder::new().timeout(self.request_timeout).build()?,
             Protocol::LocalSocket => {
                 let Some(socket_path) = &self.socket_path else {
                     log::error!("missing socket path parameter");
@@ -120,14 +119,14 @@ impl Mihomo {
                 {
                     reqwest::ClientBuilder::new()
                         .windows_named_pipe(socket_path.clone())
-                        .timeout(DEFAULT_REQUEST_TIMEOUT)
+                        .timeout(self.request_timeout)
                         .build()?
                 }
                 #[cfg(unix)]
                 {
                     reqwest::ClientBuilder::new()
                         .unix_socket(socket_path.clone())
-                        .timeout(DEFAULT_REQUEST_TIMEOUT)
+                        .timeout(self.request_timeout)
                         .build()?
                 }
             }
@@ -510,7 +509,7 @@ impl Mihomo {
         let group_name_encode = urlencoding::encode(group_name);
         let test_url = urlencoding::encode(test_url);
         let suffix_url = format!("/group/{group_name_encode}/delay?url={test_url}&timeout={timeout}");
-        let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
+        let req_timeout = Duration::from_millis(timeout as u64) + self.request_timeout;
         let response = self
             .build_request(Method::GET, &suffix_url)?
             .timeout(req_timeout)
@@ -603,7 +602,7 @@ impl Mihomo {
     ) -> Result<ProxyDelay> {
         let provider_name_encode = urlencoding::encode(provider_name);
         let proxy_name_encode = urlencoding::encode(proxy_name);
-        let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
+        let req_timeout = Duration::from_millis(timeout as u64) + self.request_timeout;
         let response = self
             .build_request(
                 Method::GET,
@@ -702,7 +701,7 @@ impl Mihomo {
     /// 一般用于代理节点的延迟测试，也可传代理组名称（只会测试代理组下选中的代理节点）
     pub async fn delay_proxy_by_name(&self, proxy_name: &str, test_url: &str, timeout: u32) -> Result<ProxyDelay> {
         let proxy_name_encode = urlencoding::encode(proxy_name);
-        let req_timeout = Duration::from_millis(timeout as u64) + DEFAULT_REQUEST_TIMEOUT;
+        let req_timeout = Duration::from_millis(timeout as u64) + self.request_timeout;
         let response = self
             .build_request(Method::GET, &format!("/proxies/{proxy_name_encode}/delay"))?
             .query(&[("timeout", &timeout.to_string()), ("url", &test_url.to_string())])
@@ -783,13 +782,12 @@ impl Mihomo {
         Ok(response.json::<BaseConfig>().await?)
     }
 
-    /// 重新加载配置 (默认 60 秒超时)
+    /// 重新加载配置
     ///
     /// 如果配置文件中包含了很多 provider，则需等待 provider 下载完成 (如果网络不好则导致此方法耗时)
     pub async fn reload_config(&self, force: bool, config_path: &str) -> Result<()> {
         let response = self
             .build_request(Method::PUT, "/configs")?
-            .timeout(Duration::from_secs(60))
             .query(&[("force", force)])
             .json(&json!({ "path": config_path }))
             .send()
@@ -821,7 +819,7 @@ impl Mihomo {
     pub async fn update_geo(&self) -> Result<()> {
         let response = self
             .build_request(Method::POST, "/configs/geo")?
-            .timeout(Duration::from_secs(60))
+            .timeout(DOWNLOAD_FILE_TIMEOUT)
             .send()
             .await?;
         if !response.status().is_success() {
@@ -851,7 +849,7 @@ impl Mihomo {
     pub async fn upgrade_core(&self, channel: CoreUpdaterChannel, force: bool) -> Result<()> {
         let response = self
             .build_request(Method::POST, "/upgrade")?
-            .timeout(Duration::from_secs(60))
+            .timeout(DOWNLOAD_FILE_TIMEOUT)
             .query(&[("channel", &channel.to_string()), ("force", &force.to_string())])
             .send()
             .await?;
@@ -876,7 +874,7 @@ impl Mihomo {
     pub async fn upgrade_ui(&self) -> Result<()> {
         let response = self
             .build_request(Method::POST, "/upgrade/ui")?
-            .timeout(Duration::from_secs(60))
+            .timeout(DOWNLOAD_FILE_TIMEOUT)
             .send()
             .await?;
         if !response.status().is_success() {
@@ -893,7 +891,7 @@ impl Mihomo {
     pub async fn upgrade_geo(&self) -> Result<()> {
         let response = self
             .build_request(Method::POST, "/upgrade/geo")?
-            .timeout(Duration::from_secs(60))
+            .timeout(DOWNLOAD_FILE_TIMEOUT)
             .send()
             .await?;
         if !response.status().is_success() {

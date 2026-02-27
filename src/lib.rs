@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 pub use mihomo::Mihomo;
 use tauri::{
     Manager, Runtime,
@@ -26,12 +28,16 @@ impl<R: Runtime, T: Manager<R>> crate::MihomoExt<R> for T {
     }
 }
 
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const DOWNLOAD_FILE_TIMEOUT: Duration = Duration::from_secs(60);
+
 #[derive(Debug)]
 pub struct Builder {
     protocol: Protocol,
     external_host: Option<String>,
     external_port: Option<u16>,
     secret: Option<String>,
+    request_timeout: Option<Duration>,
     socket_path: Option<String>,
 }
 
@@ -42,6 +48,7 @@ impl Default for Builder {
             external_host: Some(String::from("127.0.0.1")),
             external_port: Some(9090),
             secret: None,
+            request_timeout: Some(DEFAULT_REQUEST_TIMEOUT),
             socket_path: None,
         }
     }
@@ -77,12 +84,21 @@ impl Builder {
         self
     }
 
+    /// 设置请求超时时间
+    ///
+    /// 部分需要下载文件的更新/升级 API 方法固定超时时间为 60 秒。 例如更新 geo、更新 ui、升级内核方法
+    pub fn request_timeout(mut self, request_timeout: Duration) -> Self {
+        self.request_timeout = Some(request_timeout);
+        self
+    }
+
     pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
         let protocol = self.protocol;
         let external_host = self.external_host;
         let external_port = self.external_port;
         let secret = self.secret;
         let socket_path = self.socket_path;
+        let request_timeout = self.request_timeout.unwrap_or(DEFAULT_REQUEST_TIMEOUT);
 
         PluginBuilder::new("mihomo")
             .invoke_handler(tauri::generate_handler![
@@ -141,6 +157,7 @@ impl Builder {
                     external_port,
                     secret,
                     socket_path,
+                    request_timeout,
                     connection_manager: Default::default(),
                 };
                 mihomo.start_ws_connections_watcher();
