@@ -8,7 +8,7 @@ use ts_rs::TS;
 
 use crate::wrap_stream::WrapStream;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
     #[default]

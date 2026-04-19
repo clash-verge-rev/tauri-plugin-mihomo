@@ -25,19 +25,82 @@ use crate::{
     ret_failed_resp,
 };
 
+/// Mihomo REST/WebSocket client.
+///
+/// `protocol`, `socket_path`, `request_timeout`, and `client` are private
+/// because they are bound together: `client` caches a `reqwest::Client` whose
+/// connector is built from the other three. Mutate them only through
+/// `Mihomo::new` and the `update_*` methods so the cached client stays in
+/// sync; do not construct via struct literal.
 pub struct Mihomo {
-    pub protocol: Protocol,
+    protocol: Protocol,
     pub external_host: Option<String>,
     pub external_port: Option<u16>,
     pub secret: Option<String>,
-    pub socket_path: Option<String>,
-    pub request_timeout: Duration,
+    socket_path: Option<String>,
+    request_timeout: Duration,
     pub connection_manager: Arc<ConnectionManager>,
+    client: reqwest::Client,
 }
 
 impl Mihomo {
-    pub fn update_protocol(&mut self, protocol: Protocol) {
+    /// Build a `reqwest::Client` whose connector matches `protocol`. The
+    /// returned client carries a connection pool, so callers should cache and
+    /// reuse it across requests rather than rebuild on every call.
+    fn build_client(
+        protocol: Protocol,
+        socket_path: Option<&str>,
+        request_timeout: Duration,
+    ) -> Result<reqwest::Client> {
+        let mut builder = reqwest::ClientBuilder::new().timeout(request_timeout);
+        if matches!(protocol, Protocol::LocalSocket) {
+            let socket_path = socket_path.ok_or_else(|| {
+                log::error!("missing socket path parameter");
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "missing socket path".to_string(),
+                ))
+            })?;
+            #[cfg(windows)]
+            {
+                builder = builder.windows_named_pipe(socket_path);
+            }
+            #[cfg(unix)]
+            {
+                builder = builder.unix_socket(socket_path);
+            }
+        }
+        Ok(builder.build()?)
+    }
+
+    pub fn new(
+        protocol: Protocol,
+        external_host: Option<String>,
+        external_port: Option<u16>,
+        secret: Option<String>,
+        socket_path: Option<String>,
+        request_timeout: Duration,
+    ) -> Result<Self> {
+        let client = Self::build_client(protocol, socket_path.as_deref(), request_timeout)?;
+        Ok(Self {
+            protocol,
+            external_host,
+            external_port,
+            secret,
+            socket_path,
+            request_timeout,
+            connection_manager: Default::default(),
+            client,
+        })
+    }
+
+    /// Switch the underlying transport. On error the previous protocol and
+    /// cached client are kept intact (transactional update).
+    pub fn update_protocol(&mut self, protocol: Protocol) -> Result<()> {
+        let client = Self::build_client(protocol, self.socket_path.as_deref(), self.request_timeout)?;
         self.protocol = protocol;
+        self.client = client;
+        Ok(())
     }
 
     #[inline]
@@ -52,6 +115,24 @@ impl Mihomo {
     #[inline]
     pub fn update_secret(&mut self, secret: Option<String>) {
         self.secret = secret;
+    }
+
+    /// Update the local-socket path. Rebuilds the cached client transactionally
+    /// (on error the previous path and client are kept).
+    pub fn update_socket_path(&mut self, socket_path: Option<String>) -> Result<()> {
+        let client = Self::build_client(self.protocol, socket_path.as_deref(), self.request_timeout)?;
+        self.socket_path = socket_path;
+        self.client = client;
+        Ok(())
+    }
+
+    /// Update the request timeout. Rebuilds the cached client transactionally
+    /// (on error the previous timeout and client are kept).
+    pub fn update_request_timeout(&mut self, request_timeout: Duration) -> Result<()> {
+        let client = Self::build_client(self.protocol, self.socket_path.as_deref(), request_timeout)?;
+        self.request_timeout = request_timeout;
+        self.client = client;
+        Ok(())
     }
 
     pub fn start_ws_connections_watcher(&self) {
@@ -105,27 +186,7 @@ impl Mihomo {
     fn build_request(&self, method: Method, suffix_url: &str) -> Result<RequestBuilder> {
         let url = self.get_req_url(suffix_url)?;
         let headers = self.get_req_headers()?;
-        let client = {
-            let mut builder = reqwest::ClientBuilder::new().timeout(self.request_timeout);
-            if matches!(self.protocol, Protocol::LocalSocket) {
-                let Some(socket_path) = self.socket_path.as_deref() else {
-                    log::error!("missing socket path parameter");
-                    return Err(Error::Io(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "missing socket path".to_string(),
-                    )));
-                };
-                #[cfg(windows)]
-                {
-                    builder = builder.windows_named_pipe(socket_path);
-                }
-                #[cfg(unix)]
-                {
-                    builder = builder.unix_socket(socket_path);
-                }
-            }
-            builder.build()?
-        };
+        let client = &self.client;
 
         match method {
             Method::POST => Ok(client.post(url).headers(headers)),
@@ -897,5 +958,101 @@ impl Mihomo {
             ret_failed_resp!("{}", err_msg);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+
+    fn http_mihomo() -> Mihomo {
+        Mihomo::new(
+            Protocol::Http,
+            Some("127.0.0.1".into()),
+            Some(9090),
+            None,
+            None,
+            Duration::from_secs(1),
+        )
+        .expect("http mihomo should construct")
+    }
+
+    fn local_socket_path() -> String {
+        if cfg!(windows) {
+            r"\\.\pipe\verge-mihomo".into()
+        } else {
+            "/tmp/verge-mihomo.sock".into()
+        }
+    }
+
+    #[test]
+    fn local_socket_requires_socket_path() {
+        let result = Mihomo::new(
+            Protocol::LocalSocket,
+            None,
+            None,
+            None,
+            None,
+            Duration::from_secs(1),
+        );
+        assert!(result.is_err(), "LocalSocket without socket_path must fail");
+    }
+
+    #[test]
+    fn update_protocol_to_local_socket_without_path_rolls_back() {
+        // Transactional update: when build_client fails, the previous
+        // protocol must remain in place so the client and protocol stay
+        // consistent.
+        let mut m = http_mihomo();
+        let result = m.update_protocol(Protocol::LocalSocket);
+        assert!(result.is_err(), "switching to LocalSocket without socket_path must fail");
+        assert_eq!(m.protocol, Protocol::Http, "protocol must remain Http on rebuild error");
+    }
+
+    #[test]
+    fn update_socket_path_persists_new_path() {
+        let mut m = http_mihomo();
+        m.update_socket_path(Some(local_socket_path()))
+            .expect("update_socket_path should succeed");
+        assert_eq!(m.socket_path.as_deref(), Some(local_socket_path().as_str()));
+    }
+
+    #[test]
+    fn update_protocol_to_local_socket_with_path_succeeds() {
+        // Stage a socket_path under Http first, then switch protocol.
+        let mut m = http_mihomo();
+        m.update_socket_path(Some(local_socket_path())).expect("stage socket path");
+        m.update_protocol(Protocol::LocalSocket)
+            .expect("switch to LocalSocket with socket_path should succeed");
+        assert_eq!(m.protocol, Protocol::LocalSocket);
+        assert_eq!(m.socket_path.as_deref(), Some(local_socket_path().as_str()));
+    }
+
+    #[test]
+    fn clearing_socket_path_under_local_socket_rolls_back() {
+        // Removing socket_path while still on LocalSocket must fail and keep
+        // the previous path/client intact.
+        let mut m = Mihomo::new(
+            Protocol::LocalSocket,
+            None,
+            None,
+            None,
+            Some(local_socket_path()),
+            Duration::from_secs(1),
+        )
+        .expect("local socket mihomo should construct");
+        let result = m.update_socket_path(None);
+        assert!(result.is_err(), "clearing socket_path under LocalSocket must fail");
+        assert_eq!(m.protocol, Protocol::LocalSocket);
+        assert_eq!(m.socket_path.as_deref(), Some(local_socket_path().as_str()));
+    }
+
+    #[test]
+    fn update_request_timeout_persists() {
+        let mut m = http_mihomo();
+        m.update_request_timeout(Duration::from_secs(2))
+            .expect("timeout change should succeed");
+        assert_eq!(m.request_timeout, Duration::from_secs(2));
     }
 }
