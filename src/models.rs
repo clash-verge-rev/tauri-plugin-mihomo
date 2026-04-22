@@ -870,6 +870,159 @@ pub struct Log {
     pub payload: String,
 }
 
+// network policy
+
+// Rust-side maintainer note (not exported by ts-rs): do not add
+// `#[serde(rename_all = ...)]` or per-field `alias` to NetworkContext or
+// InterfaceContext below. The wire contract in both directions is strictly
+// snake_case — mihomo's JSON parser does not match case across underscores
+// and the plugin does not perform boundary key rewriting, so the Rust field
+// names must stay identical to the wire keys.
+/// Network context snapshot. Used both as the PUT /network/context request
+/// body and as the `context` field in the GET /network/context response.
+///
+/// Field names are snake_case on the wire in both directions, matching
+/// mihomo's JSON contract. Note: the GET response's `context` is a
+/// normalized snapshot and does NOT echo back the TTL, so a value read from
+/// GET cannot be pushed straight into a PUT while preserving "expiring vs
+/// sticky" semantics — callers that need to replay must set `ttl`
+/// explicitly themselves.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[ts(export)]
+pub struct NetworkContext {
+    pub version: u32,
+
+    pub interfaces: Vec<InterfaceContext>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub dns_suffix: Option<Vec<String>>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ttl: Option<u32>,
+}
+
+/// Per-interface entry in `NetworkContext.interfaces`. `name` is the only
+/// required field; all per-iface attributes are optional.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[ts(export)]
+pub struct InterfaceContext {
+    pub name: String,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub iface_type: Option<String>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ssid: Option<String>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub bssid: Option<String>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub gateway_ip: Option<String>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub gateway_mac: Option<String>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub subnets: Option<Vec<String>>,
+
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub metered: Option<bool>,
+}
+
+/// PUT /network/context response body.
+///
+/// `expiresAt` is always present on the wire: `null` means the context is
+/// sticky (no TTL); a concrete number is the absolute expiry timestamp in
+/// unix seconds.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
+#[ts(export, rename_all = "camelCase")]
+pub struct PutResponse {
+    pub matched_network: Option<String>,
+    pub applied: Vec<AppliedGroup>,
+
+    #[ts(type = "number | null")]
+    pub expires_at: Option<i64>,
+}
+
+/// Per-group decision carried in the PUT /network/context response.
+///
+/// `selectionSource` and `reason` are free-form strings on the wire. Current
+/// mihomo values:
+/// - `selectionSource`: `auto` / `manual` / `unknown`
+/// - `reason`: `matched` / `already_selected` / `default` /
+///   `no_change_no_default` / `unchanged_network` / `manual_locked` /
+///   `missing_target`
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
+#[ts(export, rename_all = "camelCase")]
+pub struct AppliedGroup {
+    pub group: String,
+    pub target_proxy: Option<String>,
+    pub applied_proxy: String,
+    pub changed: bool,
+    pub selection_source: String,
+    pub reason: String,
+}
+
+/// GET /network/context response body.
+///
+/// `context = null` is the authoritative "no ctx" signal (cold start,
+/// DELETE, or TTL expiry); `groups` is always returned so callers can render
+/// per-group state regardless of ctx presence.
+///
+/// `matchedNetwork`, `expiresAt`, `ageSeconds` are always present on the
+/// wire, using explicit JSON null when absent. `ageSeconds = null` is a
+/// reliable ctx-absent marker. `expiresAt = null` is ambiguous — it can
+/// mean either "sticky ctx" or "no ctx" — and must be disambiguated through
+/// `context`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
+#[ts(export, rename_all = "camelCase")]
+pub struct NetworkStatus {
+    pub context: Option<NetworkContext>,
+    pub matched_network: Option<String>,
+    pub groups: Vec<GroupStatus>,
+
+    #[ts(type = "number | null")]
+    pub expires_at: Option<i64>,
+
+    #[ts(type = "number | null")]
+    pub age_seconds: Option<i64>,
+}
+
+/// Per-group state snapshot in the GET /network/context response.
+///
+/// `lastMatchedNetwork` is either a concrete network name or JSON null.
+/// The internal sentinel `"<none>"` never appears on the wire; it is always
+/// encoded as null. When null, `selectionSource` only partially
+/// disambiguates the cause:
+/// - `selectionSource = "unknown"` + null → never evaluated
+/// - `selectionSource = "auto"` + null → evaluated, matched no network
+/// - `selectionSource = "manual"` + null → ambiguous: either the group was
+///   manually set before any evaluation, or evaluation found no match and
+///   was then overridden manually. Callers that must distinguish these
+///   have to track host-side interaction history.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
+#[ts(export, rename_all = "camelCase")]
+pub struct GroupStatus {
+    pub group: String,
+    pub current_proxy: String,
+    pub selection_source: String,
+    pub last_matched_network: Option<String>,
+}
+
 // ------------- use in rust, no need export to typescript -----------------
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 pub struct ErrorResponse {

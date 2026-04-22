@@ -229,6 +229,22 @@ pub(crate) async fn upgrade_geo(state: State<'_, RwLock<Mihomo>>) -> Result<()> 
     state.read().await.upgrade_geo().await
 }
 
+// network policy
+#[command]
+pub(crate) async fn put_network_context(state: State<'_, RwLock<Mihomo>>, ctx: NetworkContext) -> Result<PutResponse> {
+    state.read().await.put_network_context(&ctx).await
+}
+
+#[command]
+pub(crate) async fn delete_network_context(state: State<'_, RwLock<Mihomo>>) -> Result<()> {
+    state.read().await.delete_network_context().await
+}
+
+#[command]
+pub(crate) async fn get_network_context(state: State<'_, RwLock<Mihomo>>) -> Result<NetworkStatus> {
+    state.read().await.get_network_context().await
+}
+
 // mihomo websocket
 #[command]
 pub(crate) async fn ws_traffic(

@@ -141,6 +141,10 @@ impl Builder {
                 commands::upgrade_core,
                 commands::upgrade_ui,
                 commands::upgrade_geo,
+                // network policy
+                commands::put_network_context,
+                commands::delete_network_context,
+                commands::get_network_context,
                 // ws
                 commands::ws_traffic,
                 commands::ws_memory,

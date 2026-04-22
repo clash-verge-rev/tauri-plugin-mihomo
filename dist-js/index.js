@@ -290,6 +290,27 @@ async function upgradeUi() {
 async function upgradeGeo() {
     await invoke("plugin:mihomo|upgrade_geo");
 }
+// network policy
+/**
+ * 推送网络上下文，触发 network-policy 状态机
+ */
+async function putNetworkContext(ctx) {
+    return await invoke("plugin:mihomo|put_network_context", {
+        ctx,
+    });
+}
+/**
+ * 清除网络上下文
+ */
+async function deleteNetworkContext() {
+    await invoke("plugin:mihomo|delete_network_context");
+}
+/**
+ * 获取网络上下文与各组应用状态
+ */
+async function getNetworkContext() {
+    return await invoke("plugin:mihomo|get_network_context");
+}
 /**
  * 清除 Rust 侧中所有的 WebSocket 连接
  */
@@ -437,4 +458,4 @@ class MihomoWebSocket {
 }
 MihomoWebSocket.instances = new Set();
 
-export { MihomoWebSocket, clearAllWsConnections, closeAllConnections, closeConnection, delayGroup, delayProxyByName, flushDNS, flushFakeIp, getBaseConfig, getConnections, getGroupByName, getGroups, getProxies, getProxyByName, getProxyProviderByName, getProxyProviders, getRuleProviders, getRules, getVersion, healthcheckNodeInProvider, healthcheckProxyProvider, patchBaseConfig, reloadConfig, restart, selectNodeForGroup, unfixedProxy, updateController, updateGeo, updateProxyProvider, updateRuleProvider, updateSecret, upgradeCore, upgradeGeo, upgradeUi };
+export { MihomoWebSocket, clearAllWsConnections, closeAllConnections, closeConnection, delayGroup, delayProxyByName, deleteNetworkContext, flushDNS, flushFakeIp, getBaseConfig, getConnections, getGroupByName, getGroups, getNetworkContext, getProxies, getProxyByName, getProxyProviderByName, getProxyProviders, getRuleProviders, getRules, getVersion, healthcheckNodeInProvider, healthcheckProxyProvider, patchBaseConfig, putNetworkContext, reloadConfig, restart, selectNodeForGroup, unfixedProxy, updateController, updateGeo, updateProxyProvider, updateRuleProvider, updateSecret, upgradeCore, upgradeGeo, upgradeUi };
