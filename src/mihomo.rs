@@ -211,17 +211,28 @@ impl Mihomo {
                 tokio::spawn(async move {
                     let manager_ = Arc::clone(&manager);
                     loop {
-                        if !manager_.0.read().await.keys().any(|key| key == &id) {
+                        let is_connection_active = manager_.0.read().await.contains_key(&id);
+                        log::trace!(
+                            "waiting for websocket message, connection_id: {id}, active: {is_connection_active}"
+                        );
+                        if !is_connection_active {
                             log::debug!("connection [{id}] is removed from manager");
                             break;
                         }
-                        if let Some(message) = reader.next().await {
-                            if let Ok(Message::Close(_)) = message {
-                                log::debug!("connection [{id}] is closed");
-                                manager_.0.write().await.remove(&id);
+                        match reader.next().await {
+                            Some(message) => {
+                                if let Ok(Message::Close(_)) = message {
+                                    log::debug!("connection [{id}] is closed");
+                                    manager_.0.write().await.remove(&id);
+                                }
+                                let response = handle_message(message);
+                                on_message(response);
                             }
-                            let response = handle_message(message);
-                            on_message(response);
+                            None => {
+                                log::debug!("connection [{id}] stream ended");
+                                manager_.0.write().await.remove(&id);
+                                break;
+                            }
                         }
                     }
                 });
@@ -253,17 +264,28 @@ impl Mihomo {
                     tokio::spawn(async move {
                         let manager_ = Arc::clone(&manager);
                         loop {
-                            if !manager_.0.read().await.keys().any(|key| key == &id) {
+                            let is_connection_active = manager_.0.read().await.contains_key(&id);
+                            log::trace!(
+                                "waiting for websocket message, connection_id: {id}, active: {is_connection_active}"
+                            );
+                            if !is_connection_active {
                                 log::debug!("connection [{id}] is removed from manager");
                                 break;
                             }
-                            if let Some(message) = reader.next().await {
-                                if let Ok(Message::Close(_)) = message {
-                                    log::debug!("connection [{id}] closed");
-                                    manager_.0.write().await.remove(&id);
+                            match reader.next().await {
+                                Some(message) => {
+                                    if let Ok(Message::Close(_)) = message {
+                                        log::debug!("connection [{id}] closed");
+                                        manager_.0.write().await.remove(&id);
+                                    }
+                                    let response = handle_message(message);
+                                    on_message(response);
                                 }
-                                let response = handle_message(message);
-                                on_message(response);
+                                None => {
+                                    log::debug!("connection [{id}] stream ended");
+                                    manager_.0.write().await.remove(&id);
+                                    break;
+                                }
                             }
                         }
                     });
