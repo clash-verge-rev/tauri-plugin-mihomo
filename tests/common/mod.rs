@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use tauri_plugin_mihomo::{Mihomo, models::Protocol};
 
@@ -21,26 +21,28 @@ pub fn mihomo() -> Mihomo {
             r"\\.\pipe\verge-mihomo".to_string()
             // r"\\.\pipe\clash-rs".to_string()
         };
-        Mihomo {
-            protocol: Protocol::LocalSocket,
-            external_host: None,
-            external_port: None,
-            secret: None,
-            socket_path: Some(socket_path),
-            request_timeout: Duration::from_millis(100),
-            connection_manager: Arc::new(Default::default()),
-        }
+        #[allow(clippy::unwrap_used)]
+        Mihomo::new(
+            Protocol::LocalSocket,
+            None,
+            None,
+            None,
+            Some(socket_path),
+            Duration::from_millis(100),
+        )
+        .unwrap()
     } else {
         println!("connect to mihomo by http");
         // use http
-        Mihomo {
-            protocol: Protocol::Http,
-            external_host: Some("127.0.0.1".into()),
-            external_port: Some(9090),
-            secret: Some("yPMJk9i7UaR1hv3-2BkPy".into()),
-            socket_path: None,
-            request_timeout: Duration::from_secs(1),
-            connection_manager: Arc::new(Default::default()),
-        }
+        #[allow(clippy::unwrap_used)]
+        Mihomo::new(
+            Protocol::Http,
+            Some("127.0.0.1".into()),
+            Some(9090),
+            Some("yPMJk9i7UaR1hv3-2BkPy".into()),
+            None,
+            Duration::from_secs(1),
+        )
+        .unwrap()
     }
 }
