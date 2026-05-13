@@ -141,6 +141,10 @@ impl Builder {
                 commands::upgrade_core,
                 commands::upgrade_ui,
                 commands::upgrade_geo,
+                // network policy
+                commands::put_network_context,
+                commands::delete_network_context,
+                commands::get_network_context,
                 // ws
                 commands::ws_traffic,
                 commands::ws_memory,
@@ -151,15 +155,14 @@ impl Builder {
                 // commands::ws_send,
             ])
             .setup(move |app, _api| {
-                let mihomo = Mihomo {
+                let mihomo = Mihomo::new(
                     protocol,
                     external_host,
                     external_port,
                     secret,
                     socket_path,
                     request_timeout,
-                    connection_manager: Default::default(),
-                };
+                )?;
                 mihomo.start_ws_connections_watcher();
                 app.manage(RwLock::new(mihomo));
 

@@ -6,11 +6,14 @@ import {
   Groups,
   LogLevel,
   MihomoVersion,
+  NetworkContext,
+  NetworkStatus,
   Proxies,
   Proxy,
   ProxyDelay,
   ProxyProvider,
   ProxyProviders,
+  PutResponse,
   RuleProviders,
   Rules,
 } from "./bindings";
@@ -374,6 +377,33 @@ export async function upgradeUi(): Promise<void> {
  */
 export async function upgradeGeo(): Promise<void> {
   await invoke<void>("plugin:mihomo|upgrade_geo");
+}
+
+// network policy
+
+/**
+ * 推送网络上下文，触发 network-policy 状态机
+ */
+export async function putNetworkContext(
+  ctx: NetworkContext,
+): Promise<PutResponse> {
+  return await invoke<PutResponse>("plugin:mihomo|put_network_context", {
+    ctx,
+  });
+}
+
+/**
+ * 清除网络上下文
+ */
+export async function deleteNetworkContext(): Promise<void> {
+  await invoke<void>("plugin:mihomo|delete_network_context");
+}
+
+/**
+ * 获取网络上下文与各组应用状态
+ */
+export async function getNetworkContext(): Promise<NetworkStatus> {
+  return await invoke<NetworkStatus>("plugin:mihomo|get_network_context");
 }
 
 /**

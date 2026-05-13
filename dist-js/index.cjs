@@ -292,6 +292,27 @@ async function upgradeUi() {
 async function upgradeGeo() {
     await core.invoke("plugin:mihomo|upgrade_geo");
 }
+// network policy
+/**
+ * 推送网络上下文，触发 network-policy 状态机
+ */
+async function putNetworkContext(ctx) {
+    return await core.invoke("plugin:mihomo|put_network_context", {
+        ctx,
+    });
+}
+/**
+ * 清除网络上下文
+ */
+async function deleteNetworkContext() {
+    await core.invoke("plugin:mihomo|delete_network_context");
+}
+/**
+ * 获取网络上下文与各组应用状态
+ */
+async function getNetworkContext() {
+    return await core.invoke("plugin:mihomo|get_network_context");
+}
 /**
  * 清除 Rust 侧中所有的 WebSocket 连接
  */
@@ -445,12 +466,14 @@ exports.closeAllConnections = closeAllConnections;
 exports.closeConnection = closeConnection;
 exports.delayGroup = delayGroup;
 exports.delayProxyByName = delayProxyByName;
+exports.deleteNetworkContext = deleteNetworkContext;
 exports.flushDNS = flushDNS;
 exports.flushFakeIp = flushFakeIp;
 exports.getBaseConfig = getBaseConfig;
 exports.getConnections = getConnections;
 exports.getGroupByName = getGroupByName;
 exports.getGroups = getGroups;
+exports.getNetworkContext = getNetworkContext;
 exports.getProxies = getProxies;
 exports.getProxyByName = getProxyByName;
 exports.getProxyProviderByName = getProxyProviderByName;
@@ -461,6 +484,7 @@ exports.getVersion = getVersion;
 exports.healthcheckNodeInProvider = healthcheckNodeInProvider;
 exports.healthcheckProxyProvider = healthcheckProxyProvider;
 exports.patchBaseConfig = patchBaseConfig;
+exports.putNetworkContext = putNetworkContext;
 exports.reloadConfig = reloadConfig;
 exports.restart = restart;
 exports.selectNodeForGroup = selectNodeForGroup;

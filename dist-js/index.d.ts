@@ -1,4 +1,4 @@
-import { BaseConfig, Connections, CoreUpdaterChannel, Groups, LogLevel, MihomoVersion, Proxies, Proxy, ProxyDelay, ProxyProvider, ProxyProviders, RuleProviders, Rules } from "./bindings";
+import { BaseConfig, Connections, CoreUpdaterChannel, Groups, LogLevel, MihomoVersion, NetworkContext, NetworkStatus, Proxies, Proxy, ProxyDelay, ProxyProvider, ProxyProviders, PutResponse, RuleProviders, Rules } from "./bindings";
 export * from "./bindings";
 export type MihomoGroupDelay = Record<string, number>;
 /**
@@ -183,6 +183,18 @@ export declare function upgradeUi(): Promise<void>;
  * 更新 Geo
  */
 export declare function upgradeGeo(): Promise<void>;
+/**
+ * 推送网络上下文，触发 network-policy 状态机
+ */
+export declare function putNetworkContext(ctx: NetworkContext): Promise<PutResponse>;
+/**
+ * 清除网络上下文
+ */
+export declare function deleteNetworkContext(): Promise<void>;
+/**
+ * 获取网络上下文与各组应用状态
+ */
+export declare function getNetworkContext(): Promise<NetworkStatus>;
 /**
  * 清除 Rust 侧中所有的 WebSocket 连接
  */
