@@ -532,6 +532,7 @@ pub enum ProxyType {
     TrustTunnel,
     OpenVPN,
     Tailscale,
+    GostRelay,
     Selector,
     Fallback,
     URLTest,
