@@ -28,6 +28,7 @@ use tokio::{
 use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
 
 use crate::{Error, Result};
+use reqwest::ResponseBuilderExt;
 
 #[pin_project(project = WrapStreamProj)]
 pub enum WrapStream {
@@ -600,7 +601,14 @@ impl LocalSocket for RequestBuilder {
                 .map_err(|e| Error::HttpParseError(e.to_string()))?
                 .to_bytes();
 
-            let final_res = http::Response::from_parts(res_parts, collected_body);
+            let mut builder = http::Response::builder()
+                .status(res_parts.status)
+                .version(res_parts.version);
+            *builder.headers_mut().expect("builder is freshly created") = res_parts.headers;
+            let final_res = builder
+                .url(url.clone())
+                .body(collected_body)
+                .map_err(|e| Error::HttpParseError(e.to_string()))?;
 
             Ok(reqwest::Response::from(final_res))
         };

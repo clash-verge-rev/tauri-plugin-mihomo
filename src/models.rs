@@ -409,23 +409,24 @@ pub struct BrutalOption {
 
 #[derive(Debug, Serialize, TS, PartialEq, Eq)]
 #[ts(export)]
+#[serde(rename_all = "lowercase")]
 pub enum LogLevel {
-    DEBUG,
-    INFO,
-    WARNING,
-    ERROR,
-    SILENT,
+    Debug,
+    Info,
+    Warning,
+    Error,
+    Silent,
 }
 
 impl<'de> Deserialize<'de> for LogLevel {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
         match value.as_str() {
-            "DEBUG" | "debug" => Ok(LogLevel::DEBUG),
-            "INFO" | "info" => Ok(LogLevel::INFO),
-            "WARNING" | "warning" => Ok(LogLevel::WARNING),
-            "ERROR" | "error" => Ok(LogLevel::ERROR),
-            "SILENT" | "silent" => Ok(LogLevel::SILENT),
+            "DEBUG" | "debug" => Ok(LogLevel::Debug),
+            "INFO" | "info" => Ok(LogLevel::Info),
+            "WARNING" | "warning" => Ok(LogLevel::Warning),
+            "ERROR" | "error" => Ok(LogLevel::Error),
+            "SILENT" | "silent" => Ok(LogLevel::Silent),
             _ => Err(serde::de::Error::unknown_variant(
                 &value,
                 &[
@@ -440,11 +441,11 @@ impl Display for LogLevel {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogLevel::DEBUG => write!(f, "debug"),
-            LogLevel::INFO => write!(f, "info"),
-            LogLevel::WARNING => write!(f, "warning"),
-            LogLevel::ERROR => write!(f, "error"),
-            LogLevel::SILENT => write!(f, "silent"),
+            LogLevel::Debug => write!(f, "debug"),
+            LogLevel::Info => write!(f, "info"),
+            LogLevel::Warning => write!(f, "warning"),
+            LogLevel::Error => write!(f, "error"),
+            LogLevel::Silent => write!(f, "silent"),
         }
     }
 }
@@ -462,6 +463,7 @@ pub struct GeoXUrl {
 
 #[derive(Debug, Serialize, TS, PartialEq, Eq)]
 #[ts(export)]
+#[serde(rename_all = "lowercase")]
 pub enum FindProcessMode {
     Strict,
     Always,
@@ -867,21 +869,23 @@ pub struct RuleProviders {
 
 #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
+#[serde(rename_all = "lowercase")]
 pub enum RuleBehavior {
     Domain,
-    #[serde(rename = "IPCIDR")]
+    #[serde(rename = "ipcidr")]
     IpCidr,
     Classical,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[ts(export)]
+#[serde(rename_all = "lowercase")]
 pub enum RuleFormat {
-    #[serde(rename = "YamlRule")]
+    #[serde(rename = "yamlrule")]
     Yaml,
-    #[serde(rename = "TextRule")]
+    #[serde(rename = "textrule")]
     Text,
-    #[serde(rename = "MrsRule")]
+    #[serde(rename = "mrsrule")]
     Mrs,
 }
 
