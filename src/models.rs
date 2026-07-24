@@ -81,9 +81,9 @@ impl Display for Protocol {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export, rename_all = "camelCase")]
-#[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct BaseConfig {
     pub port: u16,
     pub socks_port: u16,
@@ -128,9 +128,9 @@ pub struct BaseConfig {
     pub unknown_fields: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export, rename_all = "camelCase")]
-#[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct TunConfig {
     pub enable: bool,
     pub device: String,
@@ -410,10 +410,11 @@ pub struct BrutalOption {
     pub down: Option<String>,
 }
 
-#[derive(Debug, Serialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 pub enum LogLevel {
     DEBUG,
+    #[default]
     INFO,
     WARNING,
     ERROR,
@@ -463,11 +464,12 @@ pub struct GeoXUrl {
     pub geo_site: String,
 }
 
-#[derive(Debug, Serialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 pub enum FindProcessMode {
     Strict,
     Always,
+    #[default]
     Off,
 }
 
@@ -522,10 +524,11 @@ impl Display for CoreUpdaterChannel {
 }
 
 /// clash mode enum
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum ClashMode {
+    #[default]
     Rule,
     Global,
     Direct,
@@ -543,9 +546,10 @@ impl Display for ClashMode {
 }
 
 /// tun stack enum
-#[derive(Debug, TS, PartialEq, Eq)]
+#[derive(Debug, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 pub enum TunStack {
+    #[default]
     #[ts(rename = "Mixed")]
     Mixed,
     #[ts(rename = "gVisor")]
@@ -603,7 +607,7 @@ pub struct Groups {
 
 #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct Proxy {
     // group type need
     #[ts(optional)]
@@ -786,7 +790,7 @@ string_enum! {
 
 #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct ProxyProvider {
     pub name: String,
     #[serde(rename = "type")]
@@ -822,7 +826,8 @@ pub struct Rules {
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(default)]
 #[ts(export)]
 pub struct Rule {
     #[serde(rename = "type")]
@@ -887,27 +892,46 @@ pub struct RuleProviders {
     pub providers: HashMap<String, RuleProvider>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum RuleBehavior {
-    Domain,
-    #[serde(rename = "IPCIDR")]
-    IpCidr,
-    Classical,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum RuleBehavior {
+//     Domain,
+//     #[serde(rename = "IPCIDR")]
+//     IpCidr,
+//     Classical,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum RuleBehavior {
+        Domain => "Domain",
+        IpCidr => "IPCIDR",
+        Classical => "Classical",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum RuleFormat {
-    #[serde(rename = "YamlRule")]
-    Yaml,
-    #[serde(rename = "TextRule")]
-    Text,
-    #[serde(rename = "MrsRule")]
-    Mrs,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum RuleFormat {
+//     #[serde(rename = "YamlRule")]
+//     Yaml,
+//     #[serde(rename = "TextRule")]
+//     Text,
+//     #[serde(rename = "MrsRule")]
+//     Mrs,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum RuleFormat {
+        Yaml => "YamlRule",
+        Text => "TextRule",
+        Mrs => "MrsRule",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(default)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleProvider {
@@ -926,7 +950,8 @@ pub struct RuleProvider {
 }
 
 /// connections
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(default)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Connections {
@@ -940,9 +965,9 @@ pub struct Connections {
     pub extra: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct Connection {
     pub id: String,
     pub metadata: ConnectionMetaData,
@@ -1011,9 +1036,9 @@ string_enum! {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct ConnectionMetaData {
     pub network: Network,
 

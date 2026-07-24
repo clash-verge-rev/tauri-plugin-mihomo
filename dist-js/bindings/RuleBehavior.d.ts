@@ -1,1 +1,3 @@
-export type RuleBehavior = "Domain" | "IPCIDR" | "Classical";
+export type RuleBehavior = "Domain" | "IpCidr" | "Classical" | {
+    "Unknown": string;
+};
