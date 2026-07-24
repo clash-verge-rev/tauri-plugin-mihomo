@@ -6,5 +6,5 @@ export type Connections = {
     downloadTotal: number;
     uploadTotal: number;
     connections: Array<Connection> | null;
-    memory: bigint;
+    memory: number;
 };

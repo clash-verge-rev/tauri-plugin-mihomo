@@ -1,1 +1,3 @@
-export type ProviderType = "Proxy" | "Rule";
+export type ProviderType = "Proxy" | "Rule" | {
+    "Unknown": string;
+};

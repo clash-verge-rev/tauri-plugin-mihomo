@@ -1,8 +1,8 @@
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tauri_plugin_mihomo::models::{
-    Connections, DNSMode, ErrorResponse, FindProcessMode, LogLevel, Memory, MihomoVersion, Network,
-    Connection, Proxy, ProxyType, Rule, RuleType, Traffic, TuicServer, TunConfig,
+    BaseConfig, Connection, Connections, DNSMode, ErrorResponse, FindProcessMode, LogLevel, Memory, MihomoVersion,
+    Network, Proxy, ProxyType, Rule, RuleType, Traffic, TuicServer, TunConfig, TunStack,
 };
 
 #[allow(clippy::expect_used)]
@@ -276,4 +276,26 @@ fn deserialize_memory_supports_u64_fields() {
     let mem: Memory = parse_json(raw);
     assert_eq!(mem.inuse, 4096);
     assert_eq!(mem.oslimit, 8192);
+}
+
+#[test]
+fn deserialize_unknown_tun_stack_should_parse_as_unknown_variant() {
+    // 新增/大小写差异的 stack 值不应使整个 BaseConfig 反序列化失败
+    let value = serde_json::from_str::<TunStack>("\"LWIP\"");
+    assert!(matches!(value, Ok(TunStack::Unknown(v)) if v == "LWIP"));
+    let lower = serde_json::from_str::<TunStack>("\"mixed\"");
+    assert!(matches!(lower, Ok(TunStack::Unknown(v)) if v == "mixed"));
+}
+
+#[test]
+fn deserialize_base_config_tolerates_missing_fields() {
+    // 内核仅返回部分字段时，缺失字段应回退默认值而非整体失败
+    let cfg: BaseConfig = parse_value(json!({
+        "mode": "global",
+        "tun": { "stack": "gVisor" },
+    }));
+    assert!(matches!(cfg.mode, tauri_plugin_mihomo::models::ClashMode::Global));
+    assert!(matches!(cfg.tun.stack, TunStack::Gvisor));
+    // 缺失的标量字段回退默认值
+    assert_eq!(cfg.port, 0);
 }

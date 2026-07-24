@@ -1,13 +1,11 @@
 use std::{collections::HashMap, fmt::Display};
 
-use futures_util::{SinkExt, stream::SplitSink};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::{net::TcpStream, sync::RwLock};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
+use tokio::sync::RwLock;
 use ts_rs::TS;
 
-use crate::ipc::WrapStream;
+use crate::stream::WsWriteKind;
 
 macro_rules! string_enum {
     (
@@ -48,6 +46,12 @@ macro_rules! string_enum {
                     $($value => Self::$variant,)*
                     _ => Self::Unknown(value),
                 })
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self::$first_variant
             }
         }
 
@@ -268,7 +272,6 @@ pub struct TunConfig {
     pub endpoint_independent_nat: Option<bool>,
 
     #[ts(optional)]
-    #[ts(type = "number")]
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub udp_timeout: Option<i64>,
 
@@ -549,39 +552,44 @@ pub enum TunStack {
     Gvisor,
     #[ts(rename = "System")]
     System,
+
+    /// 容错：未识别的 stack 值（新增值/大小写差异/空串等），保留原值而非整体反序列化失败
+    Unknown(String),
+}
+
+impl TunStack {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TunStack::Mixed => "Mixed",
+            TunStack::Gvisor => "gVisor",
+            TunStack::System => "System",
+            TunStack::Unknown(value) => value,
+        }
+    }
 }
 
 impl Serialize for TunStack {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        let s = match self {
-            TunStack::Mixed => "Mixed",
-            TunStack::Gvisor => "gVisor",
-            TunStack::System => "System",
-        };
-        serializer.serialize_str(s)
+        serializer.serialize_str(self.as_str())
     }
 }
 
 impl<'de> Deserialize<'de> for TunStack {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
-        match value.as_str() {
-            "Mixed" => Ok(Self::Mixed),
-            "gVisor" => Ok(Self::Gvisor),
-            "System" => Ok(Self::System),
-            _ => Err(serde::de::Error::custom("invalid tun stack")),
-        }
+        Ok(match value.as_str() {
+            "Mixed" => Self::Mixed,
+            "gVisor" => Self::Gvisor,
+            "System" => Self::System,
+            _ => Self::Unknown(value),
+        })
     }
 }
 
 impl Display for TunStack {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TunStack::Mixed => write!(f, "Mixed"),
-            TunStack::Gvisor => write!(f, "gVisor"),
-            TunStack::System => write!(f, "System"),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -593,7 +601,7 @@ pub struct Groups {
     pub proxies: Vec<Proxy>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Proxy {
@@ -742,23 +750,41 @@ pub struct ProxyProviders {
     pub providers: HashMap<String, ProxyProvider>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum ProviderType {
-    Proxy,
-    Rule,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum ProviderType {
+//     Proxy,
+//     Rule,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum ProviderType {
+        Proxy => "Proxy",
+        Rule => "Rule",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum VehicleType {
-    File,
-    HTTP,
-    Compatible,
-    Inline,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum VehicleType {
+//     File,
+//     HTTP,
+//     Compatible,
+//     Inline,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum VehicleType {
+        File => "File",
+        HTTP => "HTTP",
+        Compatible => "Compatible",
+        Inline => "Inline",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyProvider {
@@ -782,13 +808,9 @@ pub struct ProxyProvider {
 #[ts(export)]
 #[serde(rename_all = "PascalCase")]
 pub struct SubScriptionInfo {
-    #[ts(type = "number")]
     pub upload: i64,
-    #[ts(type = "number")]
     pub download: i64,
-    #[ts(type = "number")]
     pub total: i64,
-    #[ts(type = "number")]
     pub expire: i64,
 }
 
@@ -908,9 +930,7 @@ pub struct RuleProvider {
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Connections {
-    #[ts(type = "number")]
     pub download_total: u64,
-    #[ts(type = "number")]
     pub upload_total: u64,
     pub connections: Option<Vec<Connection>>,
     pub memory: u64,
@@ -926,9 +946,7 @@ pub struct Connections {
 pub struct Connection {
     pub id: String,
     pub metadata: ConnectionMetaData,
-    #[ts(type = "number")]
     pub upload: u64,
-    #[ts(type = "number")]
     pub download: u64,
     pub start: String,
     pub chains: Vec<String>,
@@ -1049,15 +1067,11 @@ pub struct ConnectionMetaData {
 #[serde(default)]
 #[ts(export)]
 pub struct Traffic {
-    #[ts(type = "number")]
     pub up: u64,
-    #[ts(type = "number")]
     pub down: u64,
     #[serde(rename = "upTotal")]
-    #[ts(type = "number")]
     pub up_total: u64,
     #[serde(rename = "downTotal")]
-    #[ts(type = "number")]
     pub down_total: u64,
 
     #[ts(skip)]
@@ -1094,24 +1108,6 @@ pub struct ErrorResponse {
 }
 
 pub type ConnectionId = u32;
-pub enum WebSocketWriter {
-    TcpStreamWriter(SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>),
-    SocketStreamWriter(SplitSink<WebSocketStream<WrapStream>, Message>),
-}
-
-impl WebSocketWriter {
-    pub async fn send(&mut self, message: Message) -> crate::Result<()> {
-        match self {
-            WebSocketWriter::TcpStreamWriter(write) => {
-                write.send(message).await?;
-            }
-            WebSocketWriter::SocketStreamWriter(write) => {
-                write.send(message).await?;
-            }
-        }
-        Ok(())
-    }
-}
 
 #[derive(Default)]
-pub struct ConnectionManager(pub RwLock<HashMap<ConnectionId, WebSocketWriter>>);
+pub struct ConnectionManager(pub RwLock<HashMap<ConnectionId, WsWriteKind>>);
