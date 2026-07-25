@@ -675,7 +675,6 @@ pub struct Proxy {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum ProxyType {
         Direct => "Direct",
         Reject => "Reject",
@@ -845,7 +844,6 @@ pub struct Rule {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum RuleType {
         Domain => "Domain",
         DomainSuffix => "DomainSuffix",
@@ -988,7 +986,6 @@ pub struct Connection {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum Network {
         TCP => "tcp",
         UDP => "udp",
@@ -999,7 +996,6 @@ string_enum! {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum ConnectionType {
         HTTP => "HTTP",
         HTTPS => "HTTPS",
@@ -1027,7 +1023,6 @@ string_enum! {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum DNSMode {
         Normal => "normal",
         FakeIP => "fake-ip",
