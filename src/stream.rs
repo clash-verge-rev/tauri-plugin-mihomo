@@ -160,7 +160,7 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<SocketStreamKind> {
                 Ok(client) => break client,
                 Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => (),
                 Err(e) => {
-                    tracing::error!("failed to connect to named pipe: {socket_path}, {e}");
+                    log::error!("failed to connect to named pipe: {socket_path}, {e}");
                     return Err(Error::FailedResponse(format!(
                         "Failed to connect to named pipe: {socket_path}, {e}"
                     )));
