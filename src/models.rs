@@ -1114,7 +1114,7 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub type ConnectionId = u32;
+pub type WsConnectionId = u32;
 
 #[derive(Default)]
-pub struct ConnectionManager(pub RwLock<HashMap<ConnectionId, WsWriteKind>>);
+pub struct ConnectionManager(pub RwLock<HashMap<WsConnectionId, WsWriteKind>>);

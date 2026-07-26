@@ -8,8 +8,8 @@ use std::{
 use arc_swap::ArcSwap;
 use futures_util::{Stream, StreamExt};
 use http::{
-    HeaderMap, HeaderValue, Request,
-    header::{AUTHORIZATION, CONNECTION, CONTENT_TYPE, HOST, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION, UPGRADE},
+    HeaderMap, HeaderValue,
+    header::{AUTHORIZATION, CONTENT_TYPE, HOST},
 };
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::{Method, RequestBuilder};
@@ -17,27 +17,25 @@ use serde_json::json;
 use tauri::{async_runtime::Mutex, ipc::InvokeResponseBody};
 use tokio_tungstenite::{
     client_async, connect_async,
-    tungstenite::{
-        Message, client::IntoClientRequest, handshake::client::generate_key, protocol::CloseFrame as ProtocolCloseFrame,
-    },
+    tungstenite::{Message, client::IntoClientRequest, protocol::CloseFrame as ProtocolCloseFrame},
 };
 
 use crate::{
     DEFAULT_REQUEST_TIMEOUT, DOWNLOAD_FILE_TIMEOUT, Error, Result,
     models::{
-        BaseConfig, ConnectionId, ConnectionManager, Connections, CoreUpdaterChannel, ErrorResponse, Groups, LogLevel,
-        MihomoVersion, Protocol, Proxies, Proxy, ProxyDelay, ProxyProvider, ProxyProviders, RuleProviders, Rules,
+        BaseConfig, ConnectionManager, Connections, CoreUpdaterChannel, ErrorResponse, Groups, LogLevel, MihomoVersion,
+        Protocol, Proxies, Proxy, ProxyDelay, ProxyProvider, ProxyProviders, RuleProviders, Rules, WsConnectionId,
     },
     ret_failed_resp,
     stream::WsStream,
 };
 
-type WsReaderKey = (usize, ConnectionId);
+type WsReaderKey = (usize, WsConnectionId);
 
 static WS_READER_CANCELLATIONS: LazyLock<Mutex<HashMap<WsReaderKey, tokio::sync::oneshot::Sender<()>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn ws_reader_key(manager: &Arc<ConnectionManager>, id: ConnectionId) -> WsReaderKey {
+fn ws_reader_key(manager: &Arc<ConnectionManager>, id: WsConnectionId) -> WsReaderKey {
     (Arc::as_ptr(manager) as usize, id)
 }
 
@@ -95,7 +93,7 @@ async fn untrack_ws_reader(key: WsReaderKey) {
 
 fn spawn_ws_reader<R, F>(
     manager: Arc<ConnectionManager>,
-    id: ConnectionId,
+    id: WsConnectionId,
     mut reader: R,
     mut cancel_reader_rx: tokio::sync::oneshot::Receiver<()>,
     reader_key: WsReaderKey,
@@ -145,16 +143,36 @@ fn spawn_ws_reader<R, F>(
 
 #[derive(Clone, Debug)]
 pub struct MihomoContext {
-    pub protocol: Protocol,
-    pub external_host: Option<String>,
-    pub external_port: Option<u16>,
-    pub secret: Option<String>,
-    pub socket_path: Option<String>,
-    pub request_timeout: Duration,
-    pub client: reqwest::Client,
+    protocol: Protocol,
+    external_host: Option<String>,
+    external_port: Option<u16>,
+    secret: Option<String>,
+    socket_path: Option<String>,
+    request_timeout: Duration,
+    client: reqwest::Client,
 }
 
 impl MihomoContext {
+    pub fn new(
+        protocol: Protocol,
+        external_host: Option<String>,
+        external_port: Option<u16>,
+        secret: Option<String>,
+        socket_path: Option<String>,
+        request_timeout: Duration,
+        client: reqwest::Client,
+    ) -> Self {
+        Self {
+            protocol,
+            external_host,
+            external_port,
+            secret,
+            socket_path,
+            request_timeout,
+            client,
+        }
+    }
+
     pub fn build_client(protocol: &Protocol, socket_path: Option<&str>) -> Result<reqwest::Client> {
         let mut builder = reqwest::ClientBuilder::new().no_proxy();
         match protocol {
@@ -235,7 +253,7 @@ impl MihomoContext {
         Ok(request.headers(headers).timeout(self.request_timeout))
     }
 
-    fn get_websocket_url(&self, suffix_url: &str) -> Result<String> {
+    fn get_websocket_url(&self, suffix_url: &str, queries: Option<Vec<(&str, &str)>>) -> Result<String> {
         let suffix_url = suffix_url.trim_start_matches("/");
         match self.protocol {
             Protocol::Http => {
@@ -243,13 +261,31 @@ impl MihomoContext {
                     let port = self.external_port.unwrap_or(9090);
                     let secret = self.secret.as_deref().unwrap_or_default();
                     let secret = utf8_percent_encode(secret, NON_ALPHANUMERIC);
-                    Ok(format!("ws://{host}:{port}/{suffix_url}?token={secret}"))
+                    let mut ws_url = format!("ws://{host}:{port}/{suffix_url}?token={secret}");
+                    if let Some(queries) = queries {
+                        queries.iter().for_each(|(k, v)| {
+                            ws_url.push_str(format!("&{k}={v}").as_str());
+                        });
+                    }
+                    Ok(ws_url)
                 } else {
                     log::error!("missing external host parameter");
                     Err(Error::MissingPathParameter("external_host".into()))
                 }
             }
-            Protocol::LocalSocket => Ok(format!("ws://localhost/{suffix_url}")),
+            Protocol::LocalSocket => {
+                let mut ws_url = format!("ws://localhost/{suffix_url}");
+                if let Some(queries) = queries {
+                    queries.iter().enumerate().for_each(|(index, (k, v))| {
+                        if index == 0 {
+                            ws_url.push_str(format!("?{k}={v}").as_str());
+                        } else {
+                            ws_url.push_str(format!("&{k}={v}").as_str());
+                        }
+                    });
+                }
+                Ok(ws_url)
+            }
         }
     }
 }
@@ -321,12 +357,18 @@ impl Mihomo {
     }
 
     /// 连接 WebSocket
-    async fn connect<F>(&self, url: String, on_message: F) -> Result<ConnectionId>
+    pub async fn connect<F>(
+        &self,
+        suffix_url: &str,
+        queries: Option<Vec<(&str, &str)>>,
+        on_message: F,
+    ) -> Result<WsConnectionId>
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
         let ctx = self.load_ctx();
         let id = rand::random();
+        let url = ctx.get_websocket_url(suffix_url, queries)?;
         // 脱敏 URL 中的 token 查询参数，避免 secret 进入日志
         let safe_url = if let Some(idx) = url.find("token=") {
             let val_start = idx + "token=".len();
@@ -359,14 +401,7 @@ impl Mihomo {
                 log::debug!("starting connect to websocket by using local socket: {socket_path}");
                 let stream = crate::stream::connect_to_socket(socket_path).await?;
 
-                let request = Request::builder()
-                    .uri(url)
-                    .header(HOST, "clash-verge")
-                    .header(SEC_WEBSOCKET_KEY, generate_key())
-                    .header(CONNECTION, "Upgrade")
-                    .header(UPGRADE, "websocket")
-                    .header(SEC_WEBSOCKET_VERSION, "13")
-                    .body(())?;
+                let request = url.into_client_request()?;
                 let (ws_stream, _) = client_async(request, stream).await?;
                 let (writer, reader) = WsStream::from(ws_stream).split();
                 let (cancel_reader, cancel_reader_rx) = tokio::sync::oneshot::channel();
@@ -382,7 +417,7 @@ impl Mihomo {
     }
 
     /// 取消 WebSocket 连接
-    pub async fn disconnect(&self, id: ConnectionId, force_timeout: Option<u64>) -> Result<()> {
+    pub async fn disconnect(&self, id: WsConnectionId, force_timeout: Option<u64>) -> Result<()> {
         log::debug!("disconnecting connection: {id}");
         let Some(mut writer) = self.connection_manager.0.write().await.remove(&id) else {
             log::error!("connection not found: {id}");
@@ -421,77 +456,65 @@ impl Mihomo {
     // |                     Mihomo API                     |
     // ------------------------------------------------------
     /// WebSocket: Mihomo 流量数据
-    pub async fn ws_traffic<F>(&self, on_message: F) -> Result<ConnectionId>
+    pub async fn ws_traffic<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(Vec<u8>) + Send + 'static,
     {
         self.ws_traffic_checked(forward_channel_text(on_message)).await
     }
 
-    pub(crate) async fn ws_traffic_checked<F>(&self, on_message: F) -> Result<ConnectionId>
+    pub(crate) async fn ws_traffic_checked<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
-        let ctx = self.load_ctx();
-        let ws_url = ctx.get_websocket_url("/traffic")?;
-        self.connect(ws_url, on_message).await
+        self.connect("/traffic", None, on_message).await
     }
 
     /// WebSocket: Mihomo 内存使用数据
-    pub async fn ws_memory<F>(&self, on_message: F) -> Result<ConnectionId>
+    pub async fn ws_memory<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(Vec<u8>) + Send + 'static,
     {
         self.ws_memory_checked(forward_channel_text(on_message)).await
     }
 
-    pub(crate) async fn ws_memory_checked<F>(&self, on_message: F) -> Result<ConnectionId>
+    pub(crate) async fn ws_memory_checked<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
-        let ctx = self.load_ctx();
-        let ws_url = ctx.get_websocket_url("/memory")?;
-        self.connect(ws_url, on_message).await
+        self.connect("/memory", None, on_message).await
     }
 
     /// WebSocket: Mihomo 连接信息数据
-    pub async fn ws_connections<F>(&self, on_message: F) -> Result<ConnectionId>
+    pub async fn ws_connections<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(Vec<u8>) + Send + 'static,
     {
         self.ws_connections_checked(forward_channel_text(on_message)).await
     }
 
-    pub(crate) async fn ws_connections_checked<F>(&self, on_message: F) -> Result<ConnectionId>
+    pub(crate) async fn ws_connections_checked<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
-        let ctx = self.load_ctx();
-        let ws_url = ctx.get_websocket_url("/connections")?;
-        self.connect(ws_url, on_message).await
+        self.connect("/connections", None, on_message).await
     }
 
     /// WebSocket: Mihomo 日志数据
-    pub async fn ws_logs<F>(&self, level: LogLevel, on_message: F) -> Result<ConnectionId>
+    pub async fn ws_logs<F>(&self, level: LogLevel, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(Vec<u8>) + Send + 'static,
     {
         self.ws_logs_checked(level, forward_channel_text(on_message)).await
     }
 
-    pub(crate) async fn ws_logs_checked<F>(&self, level: LogLevel, on_message: F) -> Result<ConnectionId>
+    pub(crate) async fn ws_logs_checked<F>(&self, level: LogLevel, on_message: F) -> Result<WsConnectionId>
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
-        let ctx = self.load_ctx();
-        // url 后面添加 format=structured 参数的日志格式如下：
-        // {"time":"11:49:58","level":"debug","message":"[DNS] hijack udp:192.168.2.1:53 from 198.18.0.1:42761","fields":[]}
-        let ws_url = ctx.get_websocket_url("/logs")?;
-        let ws_url = match ctx.protocol {
-            Protocol::Http => format!("{ws_url}&level={level}"),
-            Protocol::LocalSocket => format!("{ws_url}?level={level}"),
-        };
-        self.connect(ws_url, on_message).await
+        let level = level.to_string();
+        let queries = Some(vec![("level", level.as_str())]);
+        self.connect("/logs", queries, on_message).await
     }
 
     // clash api

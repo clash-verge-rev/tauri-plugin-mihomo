@@ -150,7 +150,7 @@ impl Builder {
             ])
             .setup(move |app, _api| {
                 let client = MihomoContext::build_client(&protocol, socket_path.as_deref())?;
-                let ctx = MihomoContext {
+                let ctx = MihomoContext::new(
                     protocol,
                     external_host,
                     external_port,
@@ -158,7 +158,7 @@ impl Builder {
                     socket_path,
                     request_timeout,
                     client,
-                };
+                );
                 let mihomo = Mihomo::new(ctx);
 
                 app.manage(mihomo);

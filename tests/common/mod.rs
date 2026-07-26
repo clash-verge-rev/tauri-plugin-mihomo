@@ -14,7 +14,7 @@ pub fn mihomo() -> Mihomo {
     let request_timeout = Duration::from_secs(5);
     let socket_path = if use_local_socket {
         if cfg!(unix) {
-            Some("/tmp/verge/verge-mihomo.sock".to_string())
+            Some("/tmp/self-mihomo.sock".to_string())
             // Some("/tmp/clash-rs.sock".to_string())
         } else {
             Some(r"\\.\pipe\verge-mihomo".to_string())
@@ -32,27 +32,27 @@ pub fn mihomo() -> Mihomo {
     let client = MihomoContext::build_client(&protocol, socket_path.as_deref()).unwrap();
     if use_local_socket {
         println!("connect to mihomo by local socket");
-        let ctx = MihomoContext {
-            protocol: Protocol::LocalSocket,
-            external_host: None,
-            external_port: None,
-            secret: None,
+        let ctx = MihomoContext::new(
+            Protocol::LocalSocket,
+            None,
+            None,
+            None,
             socket_path,
             request_timeout,
             client,
-        };
+        );
         Mihomo::new(ctx)
     } else {
         println!("connect to mihomo by http");
-        let ctx = MihomoContext {
-            protocol: Protocol::Http,
-            external_host: Some("127.0.0.1".into()),
-            external_port: Some(9090),
-            secret: Some("0Zhf7izbK7IeXgpQeKzNQ".into()),
+        let ctx = MihomoContext::new(
+            Protocol::Http,
+            Some("127.0.0.1".into()),
+            Some(9090),
+            Some("0Zhf7izbK7IeXgpQeKzNQ".into()),
             socket_path,
             request_timeout,
             client,
-        };
+        );
         Mihomo::new(ctx)
     }
 }

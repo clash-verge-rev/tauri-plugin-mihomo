@@ -1,6 +1,6 @@
 use serde::{Serialize, ser::Serializer};
 
-use crate::models::ConnectionId;
+use crate::models::WsConnectionId;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -17,7 +17,7 @@ pub enum Error {
     #[error("Websocket error: {0}")]
     Websocket(String),
     #[error("Connection not found for the given id: {0}")]
-    ConnectionNotFound(ConnectionId),
+    ConnectionNotFound(WsConnectionId),
     #[error(transparent)]
     InvalidHeaderValue(#[from] tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue),
     #[error(transparent)]
