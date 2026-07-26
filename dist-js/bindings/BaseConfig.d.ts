@@ -4,6 +4,7 @@ import type { GeoXUrl } from "./GeoXUrl";
 import type { LogLevel } from "./LogLevel";
 import type { TuicServer } from "./TuicServer";
 import type { TunConfig } from "./TunConfig";
+import type { JsonValue } from "./serde_json/JsonValue";
 export type BaseConfig = {
     port: number;
     socksPort: number;
@@ -42,4 +43,8 @@ export type BaseConfig = {
     keepAliveInterval: number;
     keepAliveIdle: number;
     disableKeepAlive: boolean;
-};
+} & ({
+    [key in string]: number | string | boolean | Array<JsonValue> | {
+        [key in string]: JsonValue;
+    } | null;
+});

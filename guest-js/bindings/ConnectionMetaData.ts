@@ -2,5 +2,6 @@
 import type { ConnectionType } from "./ConnectionType";
 import type { DNSMode } from "./DNSMode";
 import type { Network } from "./Network";
+import type { JsonValue } from "./serde_json/JsonValue";
 
-export type ConnectionMetaData = { network: Network, type: ConnectionType, sourceIP: string, destinationIP: string, sourceGeoIP: Array<string> | null, destinationGeoIP: Array<string> | null, sourceIPASN: string, destinationIPASN: string, sourcePort: string, destinationPort: string, inboundIP: string, inboundPort: string, inboundName: string, inboundUser: string, host: string, dnsMode: DNSMode, uid: number, process: string, processPath: string, specialProxy: string, specialRules: string, remoteDestination: string, dscp: number, sniffHost: string, };
+export type ConnectionMetaData = { network: Network, type: ConnectionType, sourceIP: string, destinationIP: string, sourceGeoIP: Array<string> | null, destinationGeoIP: Array<string> | null, sourceIPASN: string, destinationIPASN: string, sourcePort: string, destinationPort: string, inboundIP: string, inboundPort: string, inboundName: string, inboundUser: string, host: string, dnsMode: DNSMode, uid: number, process: string, processPath: string, specialProxy: string, specialRules: string, remoteDestination: string, dscp: number, sniffHost: string, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });

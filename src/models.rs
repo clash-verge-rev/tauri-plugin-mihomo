@@ -123,7 +123,6 @@ pub struct BaseConfig {
     pub keep_alive_idle: isize,
     pub disable_keep_alive: bool,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub unknown_fields: HashMap<String, Value>,
 }
@@ -308,7 +307,6 @@ pub struct TunConfig {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub sendmsgx: Option<bool>,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub unknown_fields: HashMap<String, Value>,
 }
@@ -377,7 +375,6 @@ pub struct TuicServer {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub mux_option: Option<MuxOption>,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -496,7 +493,6 @@ pub struct MihomoVersion {
     pub meta: bool,
     pub version: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -667,7 +663,6 @@ pub struct Proxy {
     #[serde(rename(serialize = "providerName", deserialize = "provider-name"))]
     pub provider_name: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub unknown_fields: HashMap<String, Value>,
 }
@@ -801,7 +796,6 @@ pub struct ProxyProvider {
     pub updated_at: Option<String>,
     pub subscription_info: Option<SubScriptionInfo>,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -836,7 +830,6 @@ pub struct Rule {
     pub proxy: String,
     pub size: i32,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -942,7 +935,6 @@ pub struct RuleProvider {
     pub updated_at: String,
     pub vehicle_type: VehicleType,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -958,7 +950,6 @@ pub struct Connections {
     pub connections: Option<Vec<Connection>>,
     pub memory: u64,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -978,7 +969,6 @@ pub struct Connection {
     pub rule: String,
     pub rule_payload: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -1078,7 +1068,6 @@ pub struct ConnectionMetaData {
     pub dscp: u8,
     pub sniff_host: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -1094,7 +1083,6 @@ pub struct Traffic {
     #[serde(rename = "downTotal")]
     pub down_total: u64,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -1115,7 +1103,6 @@ pub struct Log {
     pub log_type: String,
     pub payload: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }

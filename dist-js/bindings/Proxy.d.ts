@@ -1,6 +1,7 @@
 import type { DelayHistory } from "./DelayHistory";
 import type { Extra } from "./Extra";
 import type { ProxyType } from "./ProxyType";
+import type { JsonValue } from "./serde_json/JsonValue";
 export type Proxy = {
     all?: Array<string>;
     expectedStatus?: string;
@@ -27,4 +28,8 @@ export type Proxy = {
     dialerProxy: string;
     routingMark: number;
     providerName: string;
-};
+} & ({
+    [key in string]: number | string | boolean | Array<JsonValue> | {
+        [key in string]: JsonValue;
+    } | null;
+});

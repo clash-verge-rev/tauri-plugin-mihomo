@@ -1,4 +1,4 @@
-use tauri_plugin_mihomo::Protocol;
+use tauri_plugin_mihomo::models::Protocol;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
