@@ -367,7 +367,7 @@ impl Mihomo {
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
         let ctx = self.load_ctx();
-        let id = rand::random();
+        let id = fast_uuid_v7::gen_id();
         let url = ctx.get_websocket_url(suffix_url, queries)?;
         // 脱敏 URL 中的 token 查询参数，避免 secret 进入日志
         let safe_url = if let Some(idx) = url.find("token=") {

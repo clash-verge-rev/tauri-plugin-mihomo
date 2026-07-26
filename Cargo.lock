@@ -799,6 +799,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast-uuid-v7"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8eaa2987e8b03da0c1659e70392d20480a595047e3db7922094ffe364e9d7b0"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3598,12 +3607,12 @@ version = "0.5.5"
 dependencies = [
  "arc-swap",
  "dotenvy",
+ "fast-uuid-v7",
  "futures-util",
  "http",
  "log",
  "percent-encoding",
  "pin-project",
- "rand",
  "reqwest",
  "serde",
  "serde_json",
