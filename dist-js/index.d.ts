@@ -195,7 +195,6 @@ export type Message = MessageKind<"Text", string>;
 export declare class MihomoWebSocket {
     id: number;
     private readonly listeners;
-    private static instances;
     constructor(id: number, listeners: Set<(arg: Message) => void>);
     /**
      * 创建一个新的 WebSocket 连接，用于 Mihomo 的流量监控

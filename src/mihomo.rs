@@ -430,10 +430,15 @@ impl Mihomo {
             reason: "Disconnected by client".into(),
         }));
 
-        if let Some(timeout) = force_timeout.filter(|timeout| *timeout > 0) {
-            let _ = tokio::time::timeout(Duration::from_millis(timeout), writer.send(close_message)).await;
-        } else {
+        let close_fut = async {
             let _ = writer.send(close_message).await;
+            let _ = writer.close().await;
+        };
+
+        if let Some(timeout) = force_timeout.filter(|timeout| *timeout > 0) {
+            let _ = tokio::time::timeout(Duration::from_millis(timeout), close_fut).await;
+        } else {
+            close_fut.await;
         }
         Ok(())
     }
@@ -442,13 +447,13 @@ impl Mihomo {
         log::debug!("start to clear all websocket connections");
         let mut manager = self.connection_manager.0.write().await;
         log::debug!("manage_ids: {:?}", manager.keys());
-        let ids: Vec<_> = manager.keys().copied().collect();
-        manager.clear();
-        log::debug!("clear all done, manager_ids: {:?}", manager.keys());
+        let entries: Vec<_> = manager.drain().collect();
         drop(manager);
-        for id in ids {
+        for (id, mut writer) in entries {
             cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;
+            let _ = writer.close().await;
         }
+        log::debug!("clear all done, manager_ids: {:?}", self.connection_manager.0.read().await.keys());
         Ok(())
     }
 

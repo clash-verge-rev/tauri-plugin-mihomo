@@ -86,6 +86,15 @@ impl WsWriteKind {
         }
         Ok(())
     }
+
+    /// 优雅关闭 WebSocket 写入端，发送并刷新 close 帧。
+    pub async fn close(&mut self) -> crate::Result<()> {
+        match self {
+            Self::Tcp(write) => write.close().await?,
+            Self::Socket(write) => write.close().await?,
+        }
+        Ok(())
+    }
 }
 
 #[pin_project(project = WrapStreamProj)]

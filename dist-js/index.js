@@ -297,6 +297,15 @@ async function clearAllWsConnections() {
     await invoke("plugin:mihomo|clear_all_ws_connections");
 }
 const textDecoder = new TextDecoder();
+/**
+ * Best-effort cleanup for MihomoWebSocket instances that are garbage collected
+ * without an explicit close(). This prevents the backend from keeping a live
+ * Tauri Channel indefinitely and releasing the JS closure that captures the
+ * listener set.
+ */
+const socketFinalizer = new FinalizationRegistry((id) => {
+    invoke("plugin:mihomo|ws_disconnect", { id, forceTimeout: 0 }).catch(() => { });
+});
 function isMessageKind(message) {
     if (typeof message !== "object" || message === null || Array.isArray(message)) {
         return false;
@@ -326,14 +335,24 @@ function dispatchWebSocketMessage(listeners, message) {
 async function openWebSocketCommand(command, args = {}) {
     const listeners = new Set();
     const onMessage = new Channel();
+    // Use a WeakRef so the channel closure does not keep the listener set (and
+    // therefore the MihomoWebSocket instance) alive. Without this, the instance
+    // would be retained by the Tauri channel closure even after the user drops it.
+    const listenersRef = new WeakRef(listeners);
     onMessage.onmessage = (message) => {
-        dispatchWebSocketMessage(listeners, message);
+        const activeListeners = listenersRef.deref();
+        if (!activeListeners) {
+            return;
+        }
+        dispatchWebSocketMessage(activeListeners, message);
     };
     const id = await invoke(`plugin:mihomo|${command}`, {
         ...args,
         onMessage,
     });
-    return new MihomoWebSocket(id, listeners);
+    const instance = new MihomoWebSocket(id, listeners);
+    socketFinalizer.register(instance, id);
+    return instance;
 }
 class MihomoWebSocket {
     constructor(id, listeners) {
@@ -345,36 +364,28 @@ class MihomoWebSocket {
      * @returns WebSocket 实例
      */
     static async connect_traffic() {
-        const instance = await openWebSocketCommand("ws_traffic");
-        MihomoWebSocket.instances.add(instance);
-        return instance;
+        return openWebSocketCommand("ws_traffic");
     }
     /**
      * 创建一个新的 WebSocket 连接，用于 Mihomo 的内存监控
      * @returns WebSocket 实例
      */
     static async connect_memory() {
-        const instance = await openWebSocketCommand("ws_memory");
-        MihomoWebSocket.instances.add(instance);
-        return instance;
+        return openWebSocketCommand("ws_memory");
     }
     /**
      * 创建一个新的 WebSocket 连接，用于 Mihomo 的连接监控
      * @returns WebSocket 实例
      */
     static async connect_connections() {
-        const instance = await openWebSocketCommand("ws_connections");
-        MihomoWebSocket.instances.add(instance);
-        return instance;
+        return openWebSocketCommand("ws_connections");
     }
     /**
      * 创建一个新的 WebSocket 连接，用于 Mihomo 的日志监控
      * @returns WebSocket 实例
      */
     static async connect_logs(level) {
-        const instance = await openWebSocketCommand("ws_logs", { level });
-        MihomoWebSocket.instances.add(instance);
-        return instance;
+        return openWebSocketCommand("ws_logs", { level });
     }
     /**
      * 添加处理 WebSocket 连接后接受的数据的回调函数
@@ -391,6 +402,9 @@ class MihomoWebSocket {
      * @param forceTimeout 强制关闭 WebSocket 连接等待的时间，单位: 毫秒, 默认为 0
      */
     async close() {
+        // Once the user explicitly closes the socket, the finalizer no longer needs
+        // to run and must not call disconnect with a stale id.
+        socketFinalizer.unregister(this);
         try {
             await invoke("plugin:mihomo|ws_disconnect", {
                 id: this.id,
@@ -402,18 +416,15 @@ class MihomoWebSocket {
         }
         finally {
             this.listeners.clear();
-            MihomoWebSocket.instances.delete(this);
         }
     }
     /**
      * 清理全部的 websocket 连接资源
      */
     static async cleanupAll() {
-        await Promise.all(Array.from(MihomoWebSocket.instances).map((instance) => instance.close()));
-        this.instances.clear();
+        // No strong instance set is kept; closing all backend connections is enough.
         await clearAllWsConnections();
     }
 }
-MihomoWebSocket.instances = new Set();
 
 export { MihomoWebSocket, clearAllWsConnections, closeAllConnections, closeConnection, delayGroup, delayProxyByName, flushDNS, flushFakeIp, getBaseConfig, getConnections, getGroupByName, getGroups, getProxies, getProxyByName, getProxyProviderByName, getProxyProviders, getRuleProviders, getRules, getVersion, healthcheckNodeInProvider, healthcheckProxyProvider, patchBaseConfig, reloadConfig, restart, selectNodeForGroup, unfixedProxy, updateController, updateGeo, updateProxyProvider, updateRuleProvider, updateSecret, upgradeCore, upgradeGeo, upgradeUi };

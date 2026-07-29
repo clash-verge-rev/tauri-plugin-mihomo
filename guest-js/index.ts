@@ -394,6 +394,16 @@ type RawTextChannelMessage = string | ArrayBuffer | Uint8Array | number[] | Mess
 
 const textDecoder = new TextDecoder();
 
+/**
+ * Best-effort cleanup for MihomoWebSocket instances that are garbage collected
+ * without an explicit close(). This prevents the backend from keeping a live
+ * Tauri Channel indefinitely and releasing the JS closure that captures the
+ * listener set.
+ */
+const socketFinalizer = new FinalizationRegistry<number>((id) => {
+  invoke("plugin:mihomo|ws_disconnect", { id, forceTimeout: 0 }).catch(() => {});
+});
+
 function isMessageKind(message: RawTextChannelMessage): message is Message {
   if (typeof message !== "object" || message === null || Array.isArray(message)) {
     return false;
@@ -435,21 +445,30 @@ async function openWebSocketCommand(
 ): Promise<MihomoWebSocket> {
   const listeners: Set<(arg: Message) => void> = new Set();
   const onMessage = new Channel<RawTextChannelMessage>();
+  // Use a WeakRef so the channel closure does not keep the listener set (and
+  // therefore the MihomoWebSocket instance) alive. Without this, the instance
+  // would be retained by the Tauri channel closure even after the user drops it.
+  const listenersRef = new WeakRef(listeners);
   onMessage.onmessage = (message: RawTextChannelMessage): void => {
-    dispatchWebSocketMessage(listeners, message);
+    const activeListeners = listenersRef.deref();
+    if (!activeListeners) {
+      return;
+    }
+    dispatchWebSocketMessage(activeListeners, message);
   };
 
   const id = await invoke<number>(`plugin:mihomo|${command}`, {
     ...args,
     onMessage,
   });
-  return new MihomoWebSocket(id, listeners);
+  const instance = new MihomoWebSocket(id, listeners);
+  socketFinalizer.register(instance, id);
+  return instance;
 }
 
 export class MihomoWebSocket {
   id: number;
   private readonly listeners: Set<(arg: Message) => void>;
-  private static instances = new Set<MihomoWebSocket>();
 
   constructor(id: number, listeners: Set<(arg: Message) => void>) {
     this.id = id;
@@ -461,9 +480,7 @@ export class MihomoWebSocket {
    * @returns WebSocket 实例
    */
   static async connect_traffic(): Promise<MihomoWebSocket> {
-    const instance = await openWebSocketCommand("ws_traffic");
-    MihomoWebSocket.instances.add(instance);
-    return instance;
+    return openWebSocketCommand("ws_traffic");
   }
 
   /**
@@ -471,9 +488,7 @@ export class MihomoWebSocket {
    * @returns WebSocket 实例
    */
   static async connect_memory(): Promise<MihomoWebSocket> {
-    const instance = await openWebSocketCommand("ws_memory");
-    MihomoWebSocket.instances.add(instance);
-    return instance;
+    return openWebSocketCommand("ws_memory");
   }
 
   /**
@@ -481,9 +496,7 @@ export class MihomoWebSocket {
    * @returns WebSocket 实例
    */
   static async connect_connections(): Promise<MihomoWebSocket> {
-    const instance = await openWebSocketCommand("ws_connections");
-    MihomoWebSocket.instances.add(instance);
-    return instance;
+    return openWebSocketCommand("ws_connections");
   }
 
   /**
@@ -491,9 +504,7 @@ export class MihomoWebSocket {
    * @returns WebSocket 实例
    */
   static async connect_logs(level: LogLevel): Promise<MihomoWebSocket> {
-    const instance = await openWebSocketCommand("ws_logs", { level });
-    MihomoWebSocket.instances.add(instance);
-    return instance;
+    return openWebSocketCommand("ws_logs", { level });
   }
 
   /**
@@ -512,6 +523,9 @@ export class MihomoWebSocket {
    * @param forceTimeout 强制关闭 WebSocket 连接等待的时间，单位: 毫秒, 默认为 0
    */
   async close(): Promise<void> {
+    // Once the user explicitly closes the socket, the finalizer no longer needs
+    // to run and must not call disconnect with a stale id.
+    socketFinalizer.unregister(this);
     try {
       await invoke("plugin:mihomo|ws_disconnect", {
         id: this.id,
@@ -521,7 +535,6 @@ export class MihomoWebSocket {
       // ignore
     } finally {
       this.listeners.clear();
-      MihomoWebSocket.instances.delete(this);
     }
   }
 
@@ -529,10 +542,7 @@ export class MihomoWebSocket {
    * 清理全部的 websocket 连接资源
    */
   static async cleanupAll() {
-    await Promise.all(
-      Array.from(MihomoWebSocket.instances).map((instance) => instance.close()),
-    );
-    this.instances.clear();
+    // No strong instance set is kept; closing all backend connections is enough.
     await clearAllWsConnections();
   }
 }
