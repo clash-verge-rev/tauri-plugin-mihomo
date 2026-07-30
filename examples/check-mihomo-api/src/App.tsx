@@ -1,8 +1,8 @@
 import { json } from "@codemirror/lang-json";
 import { invoke } from "@tauri-apps/api/core";
 import CodeMirror from "@uiw/react-codemirror";
-import { useCallback, useState } from "react";
-import { getGroups } from "tauri-plugin-mihomo-api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getGroups, MihomoWebSocket } from "tauri-plugin-mihomo-api";
 import "./App.css";
 
 function App() {
@@ -22,11 +22,53 @@ function App() {
     }
   }, [format_json]);
 
+  const wsRef = useRef<MihomoWebSocket | null>(null);
+
+  const connectMihomoConnsWs = useCallback(async () => {
+    try {
+      const ws = await MihomoWebSocket.connect_connections();
+      console.log(ws.id, typeof ws.id);
+      ws.addListener((msg) => {
+        console.log(msg);
+      });
+      wsRef.current = ws;
+    } catch (err: any) {
+      setResponse(err.toString());
+    }
+  }, []);
+
+  const closeMihomoConnsWs = useCallback(async () => {
+    try {
+      console.log(wsRef.current?.id);
+      wsRef.current?.close();
+      wsRef.current = null;
+    } catch (err: any) {
+      setResponse(err.toString());
+    }
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      MihomoWebSocket.get_all_instances().then((instances) => {
+        instances.forEach((instance) => {
+          console.log(instance);
+        });
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <main style={{ backgroundColor: "white" }}>
       <div className="row">
         <button type="button" onClick={() => check()}>
           Check
+        </button>
+        <button type="button" onClick={() => connectMihomoConnsWs()}>
+          Connect Mihomo Connections
+        </button>
+        <button type="button" onClick={() => closeMihomoConnsWs()}>
+          Disconnect Mihomo Connections
         </button>
       </div>
       <CodeMirror

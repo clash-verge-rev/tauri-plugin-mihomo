@@ -1,3 +1,4 @@
+use tauri::Manager;
 use tauri_plugin_mihomo::models::Protocol;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -18,10 +19,14 @@ pub fn run() {
         .plugin(
             tauri_plugin_mihomo::Builder::new()
                 .protocol(Protocol::LocalSocket)
-                .socket_path("/tmp/verge/verge-mihomo.sock")
+                .socket_path("/tmp/self-mihomo.sock")
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![greet, cmd_format_json])
+        .setup(|app| {
+            app.get_webview_window("main").unwrap().open_devtools();
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

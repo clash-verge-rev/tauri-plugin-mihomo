@@ -214,31 +214,30 @@ pub(crate) async fn upgrade_geo(state: State<'_, Mihomo>) -> Result<()> {
 
 // mihomo websocket
 #[command]
-pub(crate) async fn ws_traffic(
-    state: State<'_, Mihomo>,
-    on_message: Channel<InvokeResponseBody>,
-) -> Result<WsConnectionId> {
+pub(crate) async fn ws_traffic(state: State<'_, Mihomo>, on_message: Channel<InvokeResponseBody>) -> Result<String> {
     state
         .ws_traffic_checked(move |data| on_message.send(data).is_ok())
         .await
+        .map(|id| id.to_string())
 }
 
 #[command]
-pub(crate) async fn ws_memory(
-    state: State<'_, Mihomo>,
-    on_message: Channel<InvokeResponseBody>,
-) -> Result<WsConnectionId> {
-    state.ws_memory_checked(move |data| on_message.send(data).is_ok()).await
+pub(crate) async fn ws_memory(state: State<'_, Mihomo>, on_message: Channel<InvokeResponseBody>) -> Result<String> {
+    state
+        .ws_memory_checked(move |data| on_message.send(data).is_ok())
+        .await
+        .map(|id| id.to_string())
 }
 
 #[command]
 pub(crate) async fn ws_connections(
     state: State<'_, Mihomo>,
     on_message: Channel<InvokeResponseBody>,
-) -> Result<WsConnectionId> {
+) -> Result<String> {
     state
         .ws_connections_checked(move |data| on_message.send(data).is_ok())
         .await
+        .map(|id| id.to_string())
 }
 
 #[command]
@@ -246,18 +245,16 @@ pub(crate) async fn ws_logs(
     state: State<'_, Mihomo>,
     level: LogLevel,
     on_message: Channel<InvokeResponseBody>,
-) -> Result<WsConnectionId> {
+) -> Result<String> {
     state
         .ws_logs_checked(level, move |data| on_message.send(data).is_ok())
         .await
+        .map(|id| id.to_string())
 }
 
 #[command]
-pub(crate) async fn ws_disconnect(
-    state: State<'_, Mihomo>,
-    id: WsConnectionId,
-    force_timeout: Option<u64>,
-) -> Result<()> {
+pub(crate) async fn ws_disconnect(state: State<'_, Mihomo>, id: String, force_timeout: Option<u64>) -> Result<()> {
+    let id: WsConnectionId = id.parse()?;
     state.disconnect(id, force_timeout).await
 }
 

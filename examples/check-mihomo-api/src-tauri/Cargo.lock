@@ -866,6 +866,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast-uuid-v7"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65d7a30239eba18ae6a60dc3c3df98af18f00bba69d2b1d5f2816a831e83bff3"
+dependencies = [
+ "rand 0.10.2",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3776,12 +3785,12 @@ name = "tauri-plugin-mihomo"
 version = "0.5.5"
 dependencies = [
  "arc-swap",
+ "fast-uuid-v7",
  "futures-util",
  "http",
  "log",
  "percent-encoding",
  "pin-project",
- "rand 0.9.5",
  "reqwest",
  "serde",
  "serde_json",

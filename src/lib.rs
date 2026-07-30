@@ -160,6 +160,7 @@ impl Builder {
                     client,
                 );
                 let mihomo = Mihomo::new(ctx);
+                mihomo.start_ws_connections_watcher();
 
                 app.manage(mihomo);
 

@@ -11,6 +11,7 @@ use http::{
     HeaderMap, HeaderValue,
     header::{AUTHORIZATION, CONTENT_TYPE, HOST},
 };
+use log::log_enabled;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::{Method, RequestBuilder};
 use serde_json::json;
@@ -436,6 +437,20 @@ impl Mihomo {
             let _ = writer.send(close_message).await;
         }
         Ok(())
+    }
+
+    pub fn start_ws_connections_watcher(&self) {
+        let connection_manager = Arc::clone(&self.connection_manager);
+        tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            loop {
+                if log_enabled!(log::Level::Trace) {
+                    let ids: Vec<WsConnectionId> = connection_manager.0.read().await.keys().copied().collect();
+                    log::trace!("mihomo ws ids: {:?}", ids);
+                }
+                interval.tick().await;
+            }
+        });
     }
 
     pub async fn clear_all_ws_connections(&self) -> Result<()> {
