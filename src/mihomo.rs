@@ -105,7 +105,6 @@ fn spawn_ws_reader<R, F>(
 {
     tokio::spawn(async move {
         loop {
-            log::trace!("waiting for websocket message, connection_id: {id}");
             tokio::select! {
                 biased;
                 _ = &mut cancel_reader_rx => {
