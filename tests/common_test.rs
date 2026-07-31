@@ -14,6 +14,9 @@ async fn switch_protocol() -> Result<()> {
     mihomo.update_secret(Some("set-your-secret"));
     let version = mihomo.get_version().await?;
     println!("{version:?}");
+    mihomo.update_protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)?;
+    let version = mihomo.get_version().await?;
+    println!("{version:?}");
     Ok(())
 }
 
