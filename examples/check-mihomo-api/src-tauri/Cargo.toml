@@ -21,3 +21,5 @@ tauri-build = { version = "2", features = [] }
 formatjson = "0.3.1"
 tauri = { version = "2", features = [] }
 tauri-plugin-mihomo = { path = "../../../" }
+log = "0.4"
+env_logger = "0.11"

@@ -14,7 +14,7 @@ pub fn mihomo() -> Mihomo {
     let request_timeout = Duration::from_secs(5);
     let socket_path = if use_local_socket {
         if cfg!(unix) {
-            Some("/tmp/verge/verge-mihomo.sock".to_string())
+            Some("/tmp/self-mihomo.sock".to_string())
             // Some("/tmp/clash-rs.sock".to_string())
         } else {
             Some(r"\\.\pipe\verge-mihomo".to_string())

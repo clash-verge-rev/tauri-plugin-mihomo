@@ -36,8 +36,8 @@ type WsReaderKey = (usize, WsConnectionId);
 static WS_READER_CANCELLATIONS: LazyLock<Mutex<HashMap<WsReaderKey, tokio::sync::oneshot::Sender<()>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn ws_reader_key(manager: &Arc<ConnectionManager>, id: WsConnectionId) -> WsReaderKey {
-    (Arc::as_ptr(manager) as usize, id)
+fn ws_reader_key(manager: &ConnectionManager, id: WsConnectionId) -> WsReaderKey {
+    (Arc::as_ptr(&manager.0) as usize, id)
 }
 
 fn raw_text_channel_body(text: &str) -> InvokeResponseBody {
@@ -93,7 +93,7 @@ async fn untrack_ws_reader(key: WsReaderKey) {
 }
 
 fn spawn_ws_reader<R, F>(
-    manager: Arc<ConnectionManager>,
+    manager: ConnectionManager,
     id: WsConnectionId,
     mut reader: R,
     mut cancel_reader_rx: tokio::sync::oneshot::Receiver<()>,
@@ -124,14 +124,14 @@ fn spawn_ws_reader<R, F>(
                                 if !keep_reader {
                                     log::debug!("message receiver dropped, closing websocket connection [{id}]");
                                 }
-                                manager.0.write().await.remove(&id);
+                                manager.0.remove(&id);
                                 untrack_ws_reader(reader_key).await;
                                 break;
                             }
                         }
                         None => {
                             log::debug!("connection [{id}] stream ended");
-                            manager.0.write().await.remove(&id);
+                            manager.0.remove(&id);
                             untrack_ws_reader(reader_key).await;
                             break;
                         }
@@ -293,14 +293,14 @@ impl MihomoContext {
 
 pub struct Mihomo {
     ctx: ArcSwap<MihomoContext>,
-    pub connection_manager: Arc<ConnectionManager>,
+    pub connection_manager: ConnectionManager,
 }
 
 impl Mihomo {
     pub fn new(ctx: MihomoContext) -> Self {
         Self {
             ctx: ArcSwap::from_pointee(ctx),
-            connection_manager: Arc::new(ConnectionManager::default()),
+            connection_manager: ConnectionManager::default(),
         }
     }
 
@@ -379,7 +379,7 @@ impl Mihomo {
             url.clone()
         };
         log::info!("connecting to websocket: {safe_url}, id: {id}");
-        let manager = Arc::clone(&self.connection_manager);
+        let manager = self.connection_manager.clone();
 
         match ctx.protocol {
             Protocol::Http => {
@@ -390,7 +390,7 @@ impl Mihomo {
                 let (cancel_reader, cancel_reader_rx) = tokio::sync::oneshot::channel();
                 let reader_key = ws_reader_key(&manager, id);
 
-                manager.0.write().await.insert(id, writer);
+                manager.0.insert(id, writer);
                 track_ws_reader(reader_key, cancel_reader).await;
 
                 spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
@@ -408,7 +408,7 @@ impl Mihomo {
                 let (cancel_reader, cancel_reader_rx) = tokio::sync::oneshot::channel();
                 let reader_key = ws_reader_key(&manager, id);
 
-                manager.0.write().await.insert(id, writer);
+                manager.0.insert(id, writer);
                 track_ws_reader(reader_key, cancel_reader).await;
 
                 spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
@@ -420,7 +420,7 @@ impl Mihomo {
     /// 取消 WebSocket 连接
     pub async fn disconnect(&self, id: WsConnectionId, force_timeout: Option<u64>) -> Result<()> {
         log::debug!("disconnecting connection: {id}");
-        let Some(mut writer) = self.connection_manager.0.write().await.remove(&id) else {
+        let Some((_, mut writer)) = self.connection_manager.0.remove(&id) else {
             log::error!("connection not found: {id}");
             return Err(Error::ConnectionNotFound(id));
         };
@@ -440,12 +440,12 @@ impl Mihomo {
     }
 
     pub fn start_ws_connections_watcher(&self) {
-        let connection_manager = Arc::clone(&self.connection_manager);
+        let connection_manager = self.connection_manager.clone();
         tauri::async_runtime::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));
             loop {
                 if log_enabled!(log::Level::Trace) {
-                    let ids: Vec<WsConnectionId> = connection_manager.0.read().await.keys().copied().collect();
+                    let ids: Vec<WsConnectionId> = connection_manager.0.iter().map(|entry| *entry.key()).collect();
                     log::trace!("mihomo ws ids: {:?}", ids);
                 }
                 interval.tick().await;
@@ -455,13 +455,23 @@ impl Mihomo {
 
     pub async fn clear_all_ws_connections(&self) -> Result<()> {
         log::debug!("start to clear all websocket connections");
-        let mut manager = self.connection_manager.0.write().await;
-        log::debug!("manage_ids: {:?}", manager.keys());
-        let ids: Vec<_> = manager.keys().copied().collect();
-        manager.clear();
-        log::debug!("clear all done, manager_ids: {:?}", manager.keys());
-        drop(manager);
-        for id in ids {
+        let old_keys = self
+            .connection_manager
+            .0
+            .iter()
+            .map(|entry| *entry.key())
+            .collect::<Vec<_>>();
+        log::debug!("manage_ids: {:?}", old_keys);
+        self.connection_manager.0.clear();
+        log::debug!(
+            "clear all done, manager_ids: {:?}",
+            self.connection_manager
+                .0
+                .iter()
+                .map(|entry| *entry.key())
+                .collect::<Vec<_>>()
+        );
+        for id in old_keys {
             cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;
         }
         Ok(())

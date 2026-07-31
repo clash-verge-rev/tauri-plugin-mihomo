@@ -15,6 +15,13 @@ async fn cmd_format_json(text: &str) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    env_logger::builder()
+        .write_style(env_logger::WriteStyle::Always)
+        .filter(Some("tokio_tungstenite"), log::LevelFilter::Info)
+        .filter(Some("tungstenite"), log::LevelFilter::Info)
+        .filter_level(log::LevelFilter::Trace)
+        .init();
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_mihomo::Builder::new()

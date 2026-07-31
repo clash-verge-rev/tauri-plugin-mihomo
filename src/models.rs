@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
+use clashmap::ClashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
 use ts_rs::TS;
 
 use crate::stream::WsWriteKind;
@@ -1116,5 +1116,5 @@ pub struct ErrorResponse {
 
 pub type WsConnectionId = u128;
 
-#[derive(Default)]
-pub struct ConnectionManager(pub RwLock<HashMap<WsConnectionId, WsWriteKind>>);
+#[derive(Default, Clone)]
+pub struct ConnectionManager(pub Arc<ClashMap<WsConnectionId, WsWriteKind>>);
