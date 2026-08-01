@@ -3,10 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import CodeMirror from "@uiw/react-codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getGroups, MihomoWebSocket } from "tauri-plugin-mihomo-api";
+
 import "./App.css";
 
 function App() {
   const [response, setResponse] = useState("");
+  const wsRef = useRef<MihomoWebSocket[]>([]);
 
   const format_json = useCallback(async (text: string) => {
     return await invoke<string>("cmd_format_json", { text });
@@ -22,8 +24,6 @@ function App() {
     }
   }, [format_json]);
 
-  const wsRef = useRef<MihomoWebSocket | null>(null);
-
   const connectMihomoConnsWs = useCallback(async () => {
     try {
       const ws = await MihomoWebSocket.connect_connections();
@@ -31,7 +31,7 @@ function App() {
       ws.addListener((msg) => {
         console.log(msg);
       });
-      wsRef.current = ws;
+      wsRef.current.push(ws);
     } catch (err: any) {
       setResponse(err.toString());
     }
@@ -39,9 +39,9 @@ function App() {
 
   const closeMihomoConnsWs = useCallback(async () => {
     try {
-      console.log(wsRef.current?.id);
-      wsRef.current?.close();
-      wsRef.current = null;
+      const ws = wsRef.current?.pop();
+      console.log(ws?.id);
+      ws?.close();
     } catch (err: any) {
       setResponse(err.toString());
     }

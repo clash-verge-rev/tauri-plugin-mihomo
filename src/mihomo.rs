@@ -109,6 +109,7 @@ fn spawn_ws_reader<R, F>(
                 biased;
                 _ = &mut cancel_reader_rx => {
                     log::debug!("connection [{id}] reader cancelled");
+                    manager.0.remove(&id);
                     break;
                 }
                 message = reader.next() => {
@@ -427,22 +428,33 @@ impl Mihomo {
     /// 取消 WebSocket 连接
     pub async fn disconnect(&self, id: WsConnectionId, force_timeout: Option<u64>) -> Result<()> {
         log::debug!("disconnecting connection: {id}");
-        let Some((_, mut writer)) = self.connection_manager.0.remove(&id) else {
-            log::error!("connection not found: {id}");
-            return Err(Error::ConnectionNotFound(id));
-        };
+        // 先通过 websocket 发送关闭信息, 再发送取消读取信息的关闭信号
+        {
+            let Some(mut conn) = self.connection_manager.0.get_mut(&id) else {
+                log::error!("connection not found: {id}");
+                return Err(Error::ConnectionNotFound(id));
+            };
 
-        cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;
-        let close_message = Message::Close(Some(ProtocolCloseFrame {
-            code: 1000.into(),
-            reason: "Disconnected by client".into(),
-        }));
+            let close_message = Message::Close(Some(ProtocolCloseFrame {
+                code: 1000.into(),
+                reason: "Disconnected by client".into(),
+            }));
 
-        if let Some(timeout) = force_timeout.filter(|timeout| *timeout > 0) {
-            let _ = tokio::time::timeout(Duration::from_millis(timeout), writer.send(close_message)).await;
-        } else {
+            log::debug!("send close message");
+            let writer = conn.value_mut();
             let _ = writer.send(close_message).await;
         }
+
+        if let Some(timeout) = force_timeout {
+            log::trace!("force close after wait {timeout}ms");
+            tokio::time::sleep(Duration::from_millis(timeout)).await;
+            if self.connection_manager.0.contains_key(&id) {
+                log::debug!("ws not received close message, force close");
+                cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;
+            }
+        }
+        log::debug!("close ws connection: {id} finished");
+
         Ok(())
     }
 
