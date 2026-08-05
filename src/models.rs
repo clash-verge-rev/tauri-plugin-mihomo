@@ -4,6 +4,7 @@ use clashmap::ClashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
+use uuid::Uuid;
 
 use crate::stream::WsWriteKind;
 
@@ -1114,7 +1115,7 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub type WsConnectionId = u128;
+pub type WsConnectionId = Uuid;
 
 #[derive(Default, Clone)]
 pub struct ConnectionManager(pub Arc<ClashMap<WsConnectionId, WsWriteKind>>);
