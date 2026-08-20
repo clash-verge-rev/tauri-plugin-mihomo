@@ -52,7 +52,7 @@ fn websocket_message_to_channel_body(
         Ok(Message::Close(_)) => (None, true),
         Ok(Message::Binary(_) | Message::Ping(_) | Message::Pong(_) | Message::Frame(_)) => (None, false),
         Err(err) => {
-            log::error!("websocket error: {err}");
+            log::warn!("websocket error: {err}");
             let error_message = Error::from(err).to_string();
             (Some(raw_text_channel_body(&error_message)), true)
         }
@@ -181,7 +181,6 @@ impl Mihomo {
     #[inline]
     fn socket_path(&self) -> Result<&str> {
         self.socket_path.as_deref().ok_or_else(|| {
-            log::error!("missing socket path parameter");
             Error::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "missing socket path".to_string(),
@@ -198,7 +197,6 @@ impl Mihomo {
                     let port = self.external_port.unwrap_or(9090);
                     Ok(format!("http://{host}:{port}/{suffix_url}"))
                 } else {
-                    log::error!("missing external host parameter");
                     Err(Error::Io(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         "missing external host".to_string(),
@@ -249,7 +247,7 @@ impl Mihomo {
             Protocol::Http => client.send().await.map_err(Error::Reqwest),
             Protocol::LocalSocket => {
                 let socket_path = self.socket_path()?;
-                log::debug!("send to local socket: {socket_path}");
+                log::trace!("send to local socket: {socket_path}");
                 client.send_by_local_socket(socket_path).await
             }
         }
@@ -265,7 +263,6 @@ impl Mihomo {
                     let secret = self.secret.as_deref().unwrap_or_default();
                     Ok(format!("ws://{host}:{port}/{suffix_url}?token={secret}"))
                 } else {
-                    log::error!("missing external host parameter");
                     Err(Error::Io(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         "missing external host".to_string(),
@@ -282,7 +279,7 @@ impl Mihomo {
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
         let id = rand::random();
-        log::info!("connecting to websocket: {url}, id: {id}");
+        log::debug!("connecting to websocket, id: {id}");
         let manager = Arc::clone(&self.connection_manager);
 
         match self.protocol {
@@ -307,7 +304,7 @@ impl Mihomo {
             }
             Protocol::LocalSocket => {
                 let socket_path = self.socket_path()?;
-                log::debug!("starting connect to websocket by using local socket: {socket_path}");
+                log::trace!("starting connect to websocket by using local socket: {socket_path}");
                 let stream = crate::ipc::connect_to_socket(socket_path).await?;
 
                 let request = Request::builder()
@@ -340,7 +337,7 @@ impl Mihomo {
     pub async fn disconnect(&self, id: ConnectionId, force_timeout: Option<u64>) -> Result<()> {
         log::debug!("disconnecting connection: {id}");
         let Some(mut writer) = self.connection_manager.0.write().await.remove(&id) else {
-            log::error!("connection not found: {id}");
+            log::debug!("connection not found: {id}");
             return Err(Error::ConnectionNotFound(id));
         };
 
@@ -361,10 +358,10 @@ impl Mihomo {
     pub async fn clear_all_ws_connections(&self) -> Result<()> {
         log::debug!("start to clear all websocket connections");
         let mut manager = self.connection_manager.0.write().await;
-        log::debug!("manage_ids: {:?}", manager.keys());
+        log::trace!("manage_ids: {:?}", manager.keys());
         let ids: Vec<_> = manager.keys().copied().collect();
         manager.clear();
-        log::debug!("clear all done, manager_ids: {:?}", manager.keys());
+        log::trace!("clear all done, manager_ids: {:?}", manager.keys());
         drop(manager);
         for id in ids {
             cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;

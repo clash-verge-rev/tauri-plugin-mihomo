@@ -183,7 +183,7 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
             let connection_result = match connect_fut.await {
                 Ok(result) => result,
                 Err(_) => {
-                    log::warn!("Socket connect attempt {attempt} timed out");
+                    log::debug!("Socket connect attempt {attempt} timed out");
                     last_err = Some(std::io::Error::new(ErrorKind::TimedOut, "connect timeout"));
                     continue;
                 }
@@ -193,11 +193,11 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
                 Ok(stream) => return Ok(WrapStream::Unix(stream)),
                 Err(e) => match e.kind() {
                     ErrorKind::PermissionDenied => {
-                        log::error!("Permission denied for socket: {socket_path}");
+                        log::warn!("Permission denied when connecting to local socket");
                         return Err(Error::Io(e));
                     }
                     _ => {
-                        log::warn!("Socket connect attempt {attempt} failed: {e}");
+                        log::debug!("Socket connect attempt {attempt} failed: {e}");
                         last_err = Some(e);
                     }
                 },
@@ -231,7 +231,7 @@ pub async fn connect_to_socket(socket_path: &str) -> Result<WrapStream> {
                 Ok(client) => break client,
                 Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => (),
                 Err(e) => {
-                    log::warn!("failed to connect to named pipe: {socket_path}, {e}");
+                    log::debug!("failed to connect to named pipe: {socket_path}, {e}");
                     if max_retry_count == 0 {
                         return Err(Error::Io(std::io::Error::new(
                             std::io::ErrorKind::NotFound,
@@ -460,12 +460,12 @@ impl IpcConnectionPool {
                 break;
             }
         }
-        log::debug!("Cleanup done: checked {}, kept {}", total_checked, kept);
+        log::trace!("Cleanup done: checked {}, kept {}", total_checked, kept);
     }
 
     #[inline]
     async fn get_connection<'a>(&'a self, socket_path: &str) -> Result<(IpcConnection, SemaphorePermit<'a>)> {
-        log::debug!("get connection from pool");
+        log::trace!("get connection from pool");
         // 确保获取 semaphore permit
         let permit = self.acquire_permit().await?;
         // 开始创建连接
@@ -474,7 +474,7 @@ impl IpcConnectionPool {
     }
 
     async fn acquire_permit<'a>(&'a self) -> Result<SemaphorePermit<'a>> {
-        log::debug!("acquire permit");
+        log::trace!("acquire permit");
         match self.semaphore.try_acquire() {
             Ok(permit) => Ok(permit),
             Err(_) => match self.config.reject_policy {
@@ -513,7 +513,7 @@ impl IpcConnectionPool {
     async fn acquire_or_create_connection(&self, socket_path: &str) -> Result<IpcConnection> {
         // 从池中获取连接并检查其有效性
         while let Some(conn) = self.connections.pop() {
-            log::debug!("Attempting to reuse connection from pool");
+            log::trace!("Attempting to reuse connection from pool");
             if conn.is_valid() {
                 return Ok(conn);
             }
