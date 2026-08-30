@@ -1,6 +1,7 @@
 import type { ConnectionType } from "./ConnectionType";
 import type { DNSMode } from "./DNSMode";
 import type { Network } from "./Network";
+import type { JsonValue } from "./serde_json/JsonValue";
 export type ConnectionMetaData = {
     network: Network;
     type: ConnectionType;
@@ -26,4 +27,8 @@ export type ConnectionMetaData = {
     remoteDestination: string;
     dscp: number;
     sniffHost: string;
-};
+} & ({
+    [key in string]: number | string | boolean | Array<JsonValue> | {
+        [key in string]: JsonValue;
+    } | null;
+});

@@ -300,7 +300,9 @@ async function clearAllWsConnections() {
 }
 const textDecoder = new TextDecoder();
 function isMessageKind(message) {
-    if (typeof message !== "object" || message === null || Array.isArray(message)) {
+    if (typeof message !== "object" ||
+        message === null ||
+        Array.isArray(message)) {
         return false;
     }
     const value = message;
@@ -339,6 +341,7 @@ async function openWebSocketCommand(command, args = {}) {
 }
 class MihomoWebSocket {
     constructor(id, listeners) {
+        this.closed = false;
         this.id = id;
         this.listeners = listeners;
     }
@@ -390,30 +393,33 @@ class MihomoWebSocket {
     }
     /**
      * 关闭 WebSocket 连接
-     * @param forceTimeout 强制关闭 WebSocket 连接等待的时间，单位: 毫秒, 默认为 0
      */
     async close() {
+        if (this.closed)
+            return;
+        this.closed = true;
+        // 立即断开 JS 强引用，不等待 IPC
+        this.listeners.clear();
+        MihomoWebSocket.instances.delete(this);
         try {
             await core.invoke("plugin:mihomo|ws_disconnect", {
                 id: this.id,
-                forceTimeout: 0,
+                forceTimeout: 1000,
             });
         }
-        catch (ignore) {
-            // ignore
-        }
-        finally {
-            this.listeners.clear();
-            MihomoWebSocket.instances.delete(this);
-        }
+        catch { }
     }
     /**
      * 清理全部的 websocket 连接资源
      */
     static async cleanupAll() {
         await Promise.all(Array.from(MihomoWebSocket.instances).map((instance) => instance.close()));
-        this.instances.clear();
+        MihomoWebSocket.instances.clear();
         await clearAllWsConnections();
+    }
+    // 用于开发中分析
+    static async get_all_instances() {
+        return Array.from(MihomoWebSocket.instances);
     }
 }
 MihomoWebSocket.instances = new Set();

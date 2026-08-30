@@ -390,12 +390,17 @@ export interface MessageKind<T, D> {
 
 export type Message = MessageKind<"Text", string>;
 
-type RawTextChannelMessage = string | ArrayBuffer | Uint8Array | number[] | Message;
+type RawTextChannelMessage =
+  string | ArrayBuffer | Uint8Array | number[] | Message;
 
 const textDecoder = new TextDecoder();
 
 function isMessageKind(message: RawTextChannelMessage): message is Message {
-  if (typeof message !== "object" || message === null || Array.isArray(message)) {
+  if (
+    typeof message !== "object" ||
+    message === null ||
+    Array.isArray(message)
+  ) {
     return false;
   }
 
@@ -439,7 +444,7 @@ async function openWebSocketCommand(
     dispatchWebSocketMessage(listeners, message);
   };
 
-  const id = await invoke<number>(`plugin:mihomo|${command}`, {
+  const id = await invoke<string>(`plugin:mihomo|${command}`, {
     ...args,
     onMessage,
   });
@@ -447,11 +452,13 @@ async function openWebSocketCommand(
 }
 
 export class MihomoWebSocket {
-  id: number;
+  id: string;
+  private closed = false;
   private readonly listeners: Set<(arg: Message) => void>;
+
   private static instances = new Set<MihomoWebSocket>();
 
-  constructor(id: number, listeners: Set<(arg: Message) => void>) {
+  constructor(id: string, listeners: Set<(arg: Message) => void>) {
     this.id = id;
     this.listeners = listeners;
   }
@@ -509,20 +516,21 @@ export class MihomoWebSocket {
 
   /**
    * 关闭 WebSocket 连接
-   * @param forceTimeout 强制关闭 WebSocket 连接等待的时间，单位: 毫秒, 默认为 0
    */
   async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+
+    // 立即断开 JS 强引用，不等待 IPC
+    this.listeners.clear();
+    MihomoWebSocket.instances.delete(this);
+
     try {
       await invoke("plugin:mihomo|ws_disconnect", {
         id: this.id,
-        forceTimeout: 0,
+        forceTimeout: 1000,
       });
-    } catch (ignore) {
-      // ignore
-    } finally {
-      this.listeners.clear();
-      MihomoWebSocket.instances.delete(this);
-    }
+    } catch {}
   }
 
   /**
@@ -532,7 +540,12 @@ export class MihomoWebSocket {
     await Promise.all(
       Array.from(MihomoWebSocket.instances).map((instance) => instance.close()),
     );
-    this.instances.clear();
+    MihomoWebSocket.instances.clear();
     await clearAllWsConnections();
+  }
+
+  // 用于开发中分析
+  static async get_all_instances() {
+    return Array.from(MihomoWebSocket.instances);
   }
 }

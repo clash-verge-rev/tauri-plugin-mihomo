@@ -12,7 +12,7 @@ repos:
   #     - id: check-added-large-files
   # this will check typos and fix file automatically, but need to re-add file by using git
   - repo: https://github.com/crate-ci/typos
-    rev: v1.36.2
+    rev: v1.48.0
     hooks:
       - id: typos
   - repo: local
@@ -45,4 +45,11 @@ repos:
         language: system
         types:
           - rust
+        pass_filenames: false
+
+      - id: build-dist-js
+        name: build dist-js
+        description: build dist-js
+        entry: pnpm build
+        language: node
         pass_filenames: false

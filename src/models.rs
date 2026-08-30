@@ -1,13 +1,12 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
-use futures_util::{SinkExt, stream::SplitSink};
+use clashmap::ClashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::{net::TcpStream, sync::RwLock};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 use ts_rs::TS;
+use uuid::Uuid;
 
-use crate::ipc::WrapStream;
+use crate::stream::WsWriteKind;
 
 macro_rules! string_enum {
     (
@@ -51,10 +50,16 @@ macro_rules! string_enum {
             }
         }
 
+        impl Default for $name {
+            fn default() -> Self {
+                Self::$first_variant
+            }
+        }
+
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
     Http,
@@ -77,9 +82,9 @@ impl Display for Protocol {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export, rename_all = "camelCase")]
-#[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct BaseConfig {
     pub port: u16,
     pub socks_port: u16,
@@ -119,14 +124,13 @@ pub struct BaseConfig {
     pub keep_alive_idle: isize,
     pub disable_keep_alive: bool,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub unknown_fields: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export, rename_all = "camelCase")]
-#[serde(rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "kebab-case"))]
 pub struct TunConfig {
     pub enable: bool,
     pub device: String,
@@ -268,7 +272,6 @@ pub struct TunConfig {
     pub endpoint_independent_nat: Option<bool>,
 
     #[ts(optional)]
-    #[ts(type = "number")]
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub udp_timeout: Option<i64>,
 
@@ -305,7 +308,6 @@ pub struct TunConfig {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub sendmsgx: Option<bool>,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub unknown_fields: HashMap<String, Value>,
 }
@@ -374,7 +376,6 @@ pub struct TuicServer {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub mux_option: Option<MuxOption>,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -407,10 +408,11 @@ pub struct BrutalOption {
     pub down: Option<String>,
 }
 
-#[derive(Debug, Serialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 pub enum LogLevel {
     DEBUG,
+    #[default]
     INFO,
     WARNING,
     ERROR,
@@ -460,11 +462,12 @@ pub struct GeoXUrl {
     pub geo_site: String,
 }
 
-#[derive(Debug, Serialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 pub enum FindProcessMode {
     Strict,
     Always,
+    #[default]
     Off,
 }
 
@@ -491,7 +494,6 @@ pub struct MihomoVersion {
     pub meta: bool,
     pub version: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -519,10 +521,11 @@ impl Display for CoreUpdaterChannel {
 }
 
 /// clash mode enum
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum ClashMode {
+    #[default]
     Rule,
     Global,
     Direct,
@@ -540,48 +543,54 @@ impl Display for ClashMode {
 }
 
 /// tun stack enum
-#[derive(Debug, TS, PartialEq, Eq)]
+#[derive(Debug, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 pub enum TunStack {
+    #[default]
     #[ts(rename = "Mixed")]
     Mixed,
     #[ts(rename = "gVisor")]
     Gvisor,
     #[ts(rename = "System")]
     System,
+
+    /// 容错：未识别的 stack 值（新增值/大小写差异/空串等），保留原值而非整体反序列化失败
+    Unknown(String),
+}
+
+impl TunStack {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TunStack::Mixed => "Mixed",
+            TunStack::Gvisor => "gVisor",
+            TunStack::System => "System",
+            TunStack::Unknown(value) => value,
+        }
+    }
 }
 
 impl Serialize for TunStack {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        let s = match self {
-            TunStack::Mixed => "Mixed",
-            TunStack::Gvisor => "gVisor",
-            TunStack::System => "System",
-        };
-        serializer.serialize_str(s)
+        serializer.serialize_str(self.as_str())
     }
 }
 
 impl<'de> Deserialize<'de> for TunStack {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
-        match value.as_str() {
-            "Mixed" => Ok(Self::Mixed),
-            "gVisor" => Ok(Self::Gvisor),
-            "System" => Ok(Self::System),
-            _ => Err(serde::de::Error::custom("invalid tun stack")),
-        }
+        Ok(match value.as_str() {
+            "Mixed" => Self::Mixed,
+            "gVisor" => Self::Gvisor,
+            "System" => Self::System,
+            _ => Self::Unknown(value),
+        })
     }
 }
 
 impl Display for TunStack {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TunStack::Mixed => write!(f, "Mixed"),
-            TunStack::Gvisor => write!(f, "gVisor"),
-            TunStack::System => write!(f, "System"),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -593,9 +602,9 @@ pub struct Groups {
     pub proxies: Vec<Proxy>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct Proxy {
     // group type need
     #[ts(optional)]
@@ -655,7 +664,6 @@ pub struct Proxy {
     #[serde(rename(serialize = "providerName", deserialize = "provider-name"))]
     pub provider_name: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub unknown_fields: HashMap<String, Value>,
 }
@@ -663,7 +671,6 @@ pub struct Proxy {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum ProxyType {
         Direct => "Direct",
         Reject => "Reject",
@@ -742,25 +749,43 @@ pub struct ProxyProviders {
     pub providers: HashMap<String, ProxyProvider>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum ProviderType {
-    Proxy,
-    Rule,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum ProviderType {
+//     Proxy,
+//     Rule,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum ProviderType {
+        Proxy => "Proxy",
+        Rule => "Rule",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum VehicleType {
-    File,
-    HTTP,
-    Compatible,
-    Inline,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum VehicleType {
+//     File,
+//     HTTP,
+//     Compatible,
+//     Inline,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum VehicleType {
+        File => "File",
+        HTTP => "HTTP",
+        Compatible => "Compatible",
+        Inline => "Inline",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct ProxyProvider {
     pub name: String,
     #[serde(rename = "type")]
@@ -772,7 +797,6 @@ pub struct ProxyProvider {
     pub updated_at: Option<String>,
     pub subscription_info: Option<SubScriptionInfo>,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -782,13 +806,9 @@ pub struct ProxyProvider {
 #[ts(export)]
 #[serde(rename_all = "PascalCase")]
 pub struct SubScriptionInfo {
-    #[ts(type = "number")]
     pub upload: i64,
-    #[ts(type = "number")]
     pub download: i64,
-    #[ts(type = "number")]
     pub total: i64,
-    #[ts(type = "number")]
     pub expire: i64,
 }
 
@@ -800,7 +820,8 @@ pub struct Rules {
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(default)]
 #[ts(export)]
 pub struct Rule {
     #[serde(rename = "type")]
@@ -810,7 +831,6 @@ pub struct Rule {
     pub proxy: String,
     pub size: i32,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -818,7 +838,6 @@ pub struct Rule {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum RuleType {
         Domain => "Domain",
         DomainSuffix => "DomainSuffix",
@@ -865,27 +884,46 @@ pub struct RuleProviders {
     pub providers: HashMap<String, RuleProvider>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum RuleBehavior {
-    Domain,
-    #[serde(rename = "IPCIDR")]
-    IpCidr,
-    Classical,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum RuleBehavior {
+//     Domain,
+//     #[serde(rename = "IPCIDR")]
+//     IpCidr,
+//     Classical,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum RuleBehavior {
+        Domain => "Domain",
+        IpCidr => "IPCIDR",
+        Classical => "Classical",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[ts(export)]
-pub enum RuleFormat {
-    #[serde(rename = "YamlRule")]
-    Yaml,
-    #[serde(rename = "TextRule")]
-    Text,
-    #[serde(rename = "MrsRule")]
-    Mrs,
+// #[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+// #[ts(export)]
+// pub enum RuleFormat {
+//     #[serde(rename = "YamlRule")]
+//     Yaml,
+//     #[serde(rename = "TextRule")]
+//     Text,
+//     #[serde(rename = "MrsRule")]
+//     Mrs,
+// }
+string_enum! {
+    #[derive(Debug, TS, PartialEq, Eq)]
+    #[ts(export)]
+    pub enum RuleFormat {
+        Yaml => "YamlRule",
+        Text => "TextRule",
+        Mrs => "MrsRule",
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(default)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleProvider {
@@ -898,37 +936,32 @@ pub struct RuleProvider {
     pub updated_at: String,
     pub vehicle_type: VehicleType,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
 
 /// connections
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(default)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Connections {
-    #[ts(type = "number")]
     pub download_total: u64,
-    #[ts(type = "number")]
     pub upload_total: u64,
     pub connections: Option<Vec<Connection>>,
     pub memory: u64,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct Connection {
     pub id: String,
     pub metadata: ConnectionMetaData,
-    #[ts(type = "number")]
     pub upload: u64,
-    #[ts(type = "number")]
     pub download: u64,
     pub start: String,
     pub chains: Vec<String>,
@@ -937,7 +970,6 @@ pub struct Connection {
     pub rule: String,
     pub rule_payload: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -945,7 +977,6 @@ pub struct Connection {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum Network {
         TCP => "tcp",
         UDP => "udp",
@@ -956,7 +987,6 @@ string_enum! {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum ConnectionType {
         HTTP => "HTTP",
         HTTPS => "HTTPS",
@@ -984,7 +1014,6 @@ string_enum! {
 string_enum! {
     #[derive(Debug, TS, PartialEq, Eq)]
     #[ts(export)]
-    #[ts(type = "string")]
     pub enum DNSMode {
         Normal => "normal",
         FakeIP => "fake-ip",
@@ -993,9 +1022,9 @@ string_enum! {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct ConnectionMetaData {
     pub network: Network,
 
@@ -1040,7 +1069,6 @@ pub struct ConnectionMetaData {
     pub dscp: u8,
     pub sniff_host: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -1049,18 +1077,13 @@ pub struct ConnectionMetaData {
 #[serde(default)]
 #[ts(export)]
 pub struct Traffic {
-    #[ts(type = "number")]
     pub up: u64,
-    #[ts(type = "number")]
     pub down: u64,
     #[serde(rename = "upTotal")]
-    #[ts(type = "number")]
     pub up_total: u64,
     #[serde(rename = "downTotal")]
-    #[ts(type = "number")]
     pub down_total: u64,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -1081,7 +1104,6 @@ pub struct Log {
     pub log_type: String,
     pub payload: String,
 
-    #[ts(skip)]
     #[serde(flatten, default)]
     pub extra: HashMap<String, Value>,
 }
@@ -1093,25 +1115,7 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub type ConnectionId = u32;
-pub enum WebSocketWriter {
-    TcpStreamWriter(SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>),
-    SocketStreamWriter(SplitSink<WebSocketStream<WrapStream>, Message>),
-}
+pub type WsConnectionId = Uuid;
 
-impl WebSocketWriter {
-    pub async fn send(&mut self, message: Message) -> crate::Result<()> {
-        match self {
-            WebSocketWriter::TcpStreamWriter(write) => {
-                write.send(message).await?;
-            }
-            WebSocketWriter::SocketStreamWriter(write) => {
-                write.send(message).await?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-pub struct ConnectionManager(pub RwLock<HashMap<ConnectionId, WebSocketWriter>>);
+#[derive(Default, Clone)]
+pub struct ConnectionManager(pub Arc<ClashMap<WsConnectionId, WsWriteKind>>);

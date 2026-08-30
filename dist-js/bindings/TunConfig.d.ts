@@ -1,4 +1,5 @@
 import type { TunStack } from "./TunStack";
+import type { JsonValue } from "./serde_json/JsonValue";
 export type TunConfig = {
     enable: boolean;
     device: string;
@@ -48,4 +49,8 @@ export type TunConfig = {
     inet6RouteExcludeAddress?: Array<string>;
     recvmsgx?: boolean;
     sendmsgx?: boolean;
-};
+} & ({
+    [key in string]: number | string | boolean | Array<JsonValue> | {
+        [key in string]: JsonValue;
+    } | null;
+});

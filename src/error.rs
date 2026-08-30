@@ -1,11 +1,13 @@
 use serde::{Serialize, ser::Serializer};
 
-use crate::models::ConnectionId;
+use crate::models::WsConnectionId;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Missing {0} parameter")]
+    MissingPathParameter(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -15,7 +17,7 @@ pub enum Error {
     #[error("Websocket error: {0}")]
     Websocket(String),
     #[error("Connection not found for the given id: {0}")]
-    ConnectionNotFound(ConnectionId),
+    ConnectionNotFound(WsConnectionId),
     #[error(transparent)]
     InvalidHeaderValue(#[from] tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue),
     #[error(transparent)]
@@ -28,20 +30,8 @@ pub enum Error {
     FailedResponse(String),
     #[error(transparent)]
     HttpError(#[from] http::Error),
-    #[error("Http Parse failed, {0}")]
-    HttpParseError(String),
     #[error("Parse error, {0}")]
     ParseError(String),
-    #[error("Connection pool not initialized")]
-    ConnectionPoolNotInitialized,
-    #[error("Connection pool init failed")]
-    ConnectionPoolInitFailed,
-    #[error("Connection pool is full")]
-    ConnectionPoolFull,
-    #[error("Connection failed, {0}")]
-    ConnectionFailed(String),
-    #[error("Connection lost")]
-    ConnectionLost,
 }
 
 impl Serialize for Error {

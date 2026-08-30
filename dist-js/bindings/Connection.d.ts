@@ -1,4 +1,5 @@
 import type { ConnectionMetaData } from "./ConnectionMetaData";
+import type { JsonValue } from "./serde_json/JsonValue";
 export type Connection = {
     id: string;
     metadata: ConnectionMetaData;
@@ -9,4 +10,8 @@ export type Connection = {
     providerChains: Array<string> | null;
     rule: string;
     rulePayload: string;
-};
+} & ({
+    [key in string]: number | string | boolean | Array<JsonValue> | {
+        [key in string]: JsonValue;
+    } | null;
+});

@@ -1,1 +1,3 @@
-export type Network = string;
+export type Network = "TCP" | "UDP" | "ALLNet" | {
+    "Unknown": string;
+};
