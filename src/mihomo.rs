@@ -6,6 +6,7 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, Guard};
+use clashmap::ClashMap;
 use futures_util::{Stream, StreamExt};
 use http::{
     HeaderMap, HeaderValue,
@@ -15,7 +16,7 @@ use log::log_enabled;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::{Method, RequestBuilder};
 use serde_json::json;
-use tauri::{async_runtime::Mutex, ipc::InvokeResponseBody};
+use tauri::ipc::InvokeResponseBody;
 use tokio_tungstenite::{
     client_async, connect_async,
     tungstenite::{Message, client::IntoClientRequest, protocol::CloseFrame as ProtocolCloseFrame},
@@ -33,8 +34,8 @@ use crate::{
 
 type WsReaderKey = (usize, WsConnectionId);
 
-static WS_READER_CANCELLATIONS: LazyLock<Mutex<HashMap<WsReaderKey, tokio::sync::oneshot::Sender<()>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static WS_READER_CANCELLATIONS: LazyLock<ClashMap<WsReaderKey, tokio::sync::oneshot::Sender<()>>> =
+    LazyLock::new(ClashMap::new);
 
 fn ws_reader_key(manager: &ConnectionManager, id: WsConnectionId) -> WsReaderKey {
     (Arc::as_ptr(&manager.0) as usize, id)
@@ -78,18 +79,18 @@ where
     }
 }
 
-async fn track_ws_reader(key: WsReaderKey, cancel_reader: tokio::sync::oneshot::Sender<()>) {
-    WS_READER_CANCELLATIONS.lock().await.insert(key, cancel_reader);
+fn track_ws_reader(key: WsReaderKey, cancel_reader: tokio::sync::oneshot::Sender<()>) {
+    WS_READER_CANCELLATIONS.insert(key, cancel_reader);
 }
 
-async fn cancel_ws_reader(key: WsReaderKey) {
-    if let Some(cancel_reader) = WS_READER_CANCELLATIONS.lock().await.remove(&key) {
+fn cancel_ws_reader(key: WsReaderKey) {
+    if let Some((_, cancel_reader)) = WS_READER_CANCELLATIONS.remove(&key) {
         let _ = cancel_reader.send(());
     }
 }
 
-async fn untrack_ws_reader(key: WsReaderKey) {
-    WS_READER_CANCELLATIONS.lock().await.remove(&key);
+fn untrack_ws_reader(key: WsReaderKey) {
+    WS_READER_CANCELLATIONS.remove(&key);
 }
 
 fn spawn_ws_reader<R, F>(
@@ -125,14 +126,14 @@ fn spawn_ws_reader<R, F>(
                                     log::debug!("message receiver dropped, closing websocket connection [{id}]");
                                 }
                                 manager.0.remove(&id);
-                                untrack_ws_reader(reader_key).await;
+                                untrack_ws_reader(reader_key);
                                 break;
                             }
                         }
                         None => {
                             log::debug!("connection [{id}] stream ended");
                             manager.0.remove(&id);
-                            untrack_ws_reader(reader_key).await;
+                            untrack_ws_reader(reader_key);
                             break;
                         }
                     }
@@ -387,7 +388,7 @@ impl Mihomo {
                 let reader_key = ws_reader_key(&manager, id);
 
                 manager.0.insert(id, writer);
-                track_ws_reader(reader_key, cancel_reader).await;
+                track_ws_reader(reader_key, cancel_reader);
 
                 spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
 
@@ -405,7 +406,7 @@ impl Mihomo {
                 let reader_key = ws_reader_key(&manager, id);
 
                 manager.0.insert(id, writer);
-                track_ws_reader(reader_key, cancel_reader).await;
+                track_ws_reader(reader_key, cancel_reader);
 
                 spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
                 Ok(id)
@@ -438,7 +439,7 @@ impl Mihomo {
             tokio::time::sleep(Duration::from_millis(timeout)).await;
             if self.connection_manager.0.contains_key(&id) {
                 log::debug!("ws not received close message, force close");
-                cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;
+                cancel_ws_reader(ws_reader_key(&self.connection_manager, id));
             }
         }
         log::debug!("close ws connection: {id} finished");
@@ -460,7 +461,7 @@ impl Mihomo {
         });
     }
 
-    pub async fn clear_all_ws_connections(&self) -> Result<()> {
+    pub fn clear_all_ws_connections(&self) -> Result<()> {
         log::debug!("start to clear all websocket connections");
         let old_keys = self
             .connection_manager
@@ -479,7 +480,7 @@ impl Mihomo {
                 .collect::<Vec<_>>()
         );
         for id in old_keys {
-            cancel_ws_reader(ws_reader_key(&self.connection_manager, id)).await;
+            cancel_ws_reader(ws_reader_key(&self.connection_manager, id));
         }
         Ok(())
     }
