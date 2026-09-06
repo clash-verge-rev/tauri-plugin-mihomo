@@ -96,14 +96,16 @@ struct ConnectionCount {
     count: usize,
 }
 
-fn connections_count_from_body(body: InvokeResponseBody) -> Option<usize> {
-    serde_json::from_slice::<ConnectionsCount>(&channel_body_to_text_bytes(body))
-        .ok()
-        .map(|count| count.connections.len())
-}
-
 fn connections_count_body(count: usize) -> InvokeResponseBody {
     InvokeResponseBody::Json(serde_json::json!({ "count": count }).to_string())
+}
+
+// Error frames must be forwarded unchanged: consumers rely on the error text
+// to trigger reconnection.
+fn connections_count_forward_body(text: String) -> InvokeResponseBody {
+    serde_json::from_str::<ConnectionsCount>(&text).map_or(InvokeResponseBody::Json(text), |count| {
+        connections_count_body(count.connections.len())
+    })
 }
 
 fn track_ws_reader(key: WsReaderKey, cancel_reader: tokio::sync::oneshot::Sender<()>) {
@@ -566,9 +568,9 @@ impl Mihomo {
         F: Fn(usize) + Send + 'static,
     {
         self.ws_connections_count_checked(move |data| {
-            let count = serde_json::from_slice::<ConnectionCount>(&channel_body_to_text_bytes(data))
-                .map_or(0, |reply| reply.count);
-            on_message(count);
+            if let Ok(reply) = serde_json::from_slice::<ConnectionCount>(&channel_body_to_text_bytes(data)) {
+                on_message(reply.count);
+            }
             true
         })
         .await
@@ -579,8 +581,10 @@ impl Mihomo {
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
         self.connect("/connections", None, move |body| {
-            connections_count_from_body(body)
-                .is_none_or(|count| on_message(connections_count_body(count)))
+            match String::from_utf8(channel_body_to_text_bytes(body)) {
+                Ok(text) => on_message(connections_count_forward_body(text)),
+                Err(_) => true, // unreachable: text frames are valid UTF-8
+            }
         })
         .await
     }
@@ -1256,12 +1260,19 @@ mod tests {
     }
 
     #[test]
-    fn connections_count_is_extracted_from_snapshots_only() {
-        let snapshot = r#"{"downloadTotal":1,"uploadTotal":2,"connections":[{"id":"a"},{"id":"b"},{"id":"c"}]}"#;
-        assert_eq!(connections_count_from_body(text_channel_body(snapshot)), Some(3));
+    fn connections_count_forward_body_extracts_count_from_snapshots() {
+        let snapshot =
+            r#"{"downloadTotal":1,"uploadTotal":2,"connections":[{"id":"a"},{"id":"b"},{"id":"c"}]}"#.to_string();
+        assert!(matches!(connections_count_forward_body(snapshot),
+            InvokeResponseBody::Json(text) if text == r#"{"count":3}"#));
+    }
 
+    #[test]
+    fn connections_count_forward_body_passes_error_frames_through() {
         let error_frame = serde_json::json!("websocket error: connection closed").to_string();
-        assert_eq!(connections_count_from_body(text_channel_body(&error_frame)), None);
+        let forwarded = connections_count_forward_body(error_frame.clone());
+        assert!(matches!(&forwarded,
+            InvokeResponseBody::Json(text) if *text == error_frame));
     }
 
     #[test]
