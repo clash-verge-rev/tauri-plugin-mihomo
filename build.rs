@@ -34,6 +34,7 @@ const COMMANDS: &[&str] = &[
     "ws_traffic",
     "ws_memory",
     "ws_connections",
+    "ws_connections_count",
     "ws_logs",
     "ws_disconnect",
     "clear_all_ws_connections",

@@ -214,6 +214,12 @@ export declare class MihomoWebSocket {
      */
     static connect_connections(): Promise<MihomoWebSocket>;
     /**
+     * 创建一个新的 WebSocket 连接，仅推送活跃连接数量（不含具体连接数据），
+     * 消息 data 为 '{"count":N}' 形式的 JSON 文本
+     * @returns WebSocket 实例
+     */
+    static connect_connections_count(): Promise<MihomoWebSocket>;
+    /**
      * 创建一个新的 WebSocket 连接，用于 Mihomo 的日志监控
      * @returns WebSocket 实例
      */

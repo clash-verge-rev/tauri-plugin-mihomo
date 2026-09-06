@@ -242,6 +242,16 @@ pub(crate) async fn ws_connections(
 }
 
 #[command]
+pub(crate) async fn ws_connections_count(
+    state: State<'_, Mihomo>,
+    on_message: Channel<InvokeResponseBody>,
+) -> Result<WsConnectionId> {
+    state
+        .ws_connections_count_checked(move |data| on_message.send(data).is_ok())
+        .await
+}
+
+#[command]
 pub(crate) async fn ws_logs(
     state: State<'_, Mihomo>,
     level: LogLevel,

@@ -84,6 +84,28 @@ where
     }
 }
 
+#[derive(serde::Deserialize)]
+struct ConnectionsCount {
+    #[serde(default)]
+    connections: Vec<serde::de::IgnoredAny>,
+}
+
+#[derive(serde::Deserialize)]
+struct ConnectionCount {
+    #[serde(default)]
+    count: usize,
+}
+
+fn connections_count_from_body(body: InvokeResponseBody) -> Option<usize> {
+    serde_json::from_slice::<ConnectionsCount>(&channel_body_to_text_bytes(body))
+        .ok()
+        .map(|count| count.connections.len())
+}
+
+fn connections_count_body(count: usize) -> InvokeResponseBody {
+    InvokeResponseBody::Json(serde_json::json!({ "count": count }).to_string())
+}
+
 fn track_ws_reader(key: WsReaderKey, cancel_reader: tokio::sync::oneshot::Sender<()>) {
     WS_READER_CANCELLATIONS.insert(key, cancel_reader);
 }
@@ -536,6 +558,31 @@ impl Mihomo {
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
         self.connect("/connections", None, on_message).await
+    }
+
+    /// WebSocket: Mihomo 活跃连接数量(不含具体连接数据)
+    pub async fn ws_connections_count<F>(&self, on_message: F) -> Result<WsConnectionId>
+    where
+        F: Fn(usize) + Send + 'static,
+    {
+        self.ws_connections_count_checked(move |data| {
+            let count = serde_json::from_slice::<ConnectionCount>(&channel_body_to_text_bytes(data))
+                .map_or(0, |reply| reply.count);
+            on_message(count);
+            true
+        })
+        .await
+    }
+
+    pub(crate) async fn ws_connections_count_checked<F>(&self, on_message: F) -> Result<WsConnectionId>
+    where
+        F: Fn(InvokeResponseBody) -> bool + Send + 'static,
+    {
+        self.connect("/connections", None, move |body| {
+            connections_count_from_body(body)
+                .is_none_or(|count| on_message(connections_count_body(count)))
+        })
+        .await
     }
 
     /// WebSocket: Mihomo 日志数据
@@ -1206,6 +1253,22 @@ mod tests {
                 "text frames must produce a valid-JSON channel body, got {body:?}"
             );
         }
+    }
+
+    #[test]
+    fn connections_count_is_extracted_from_snapshots_only() {
+        let snapshot = r#"{"downloadTotal":1,"uploadTotal":2,"connections":[{"id":"a"},{"id":"b"},{"id":"c"}]}"#;
+        assert_eq!(connections_count_from_body(text_channel_body(snapshot)), Some(3));
+
+        let error_frame = serde_json::json!("websocket error: connection closed").to_string();
+        assert_eq!(connections_count_from_body(text_channel_body(&error_frame)), None);
+    }
+
+    #[test]
+    fn connections_count_body_is_valid_json_with_count() {
+        let body = connections_count_body(42);
+        assert!(matches!(&body,
+            InvokeResponseBody::Json(text) if text.as_str() == r#"{"count":42}"#));
     }
 
     #[test]

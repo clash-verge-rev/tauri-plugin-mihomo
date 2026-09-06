@@ -368,6 +368,16 @@ class MihomoWebSocket {
         return instance;
     }
     /**
+     * 创建一个新的 WebSocket 连接，仅推送活跃连接数量（不含具体连接数据），
+     * 消息 data 为 '{"count":N}' 形式的 JSON 文本
+     * @returns WebSocket 实例
+     */
+    static async connect_connections_count() {
+        const instance = await openWebSocketCommand("ws_connections_count");
+        MihomoWebSocket.instances.add(instance);
+        return instance;
+    }
+    /**
      * 创建一个新的 WebSocket 连接，用于 Mihomo 的日志监控
      * @returns WebSocket 实例
      */

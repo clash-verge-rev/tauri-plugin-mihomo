@@ -144,6 +144,7 @@ impl Builder {
                 commands::ws_traffic,
                 commands::ws_memory,
                 commands::ws_connections,
+                commands::ws_connections_count,
                 commands::ws_logs,
                 commands::ws_disconnect,
                 commands::clear_all_ws_connections,
