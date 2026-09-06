@@ -41,29 +41,36 @@ fn ws_reader_key(manager: &ConnectionManager, id: WsConnectionId) -> WsReaderKey
     (Arc::as_ptr(&manager.0) as usize, id)
 }
 
-fn raw_text_channel_body(text: &str) -> InvokeResponseBody {
-    InvokeResponseBody::Raw(text.as_bytes().to_vec())
+fn text_channel_body(text: &str) -> InvokeResponseBody {
+    // The Json variant must hold valid JSON (tauri embeds it as a JS expression
+    // in the eval script); non-JSON text such as error strings is JSON-encoded
+    // as a string so the JS side receives the original text after parsing.
+    if serde_json::from_str::<serde::de::IgnoredAny>(text).is_ok() {
+        InvokeResponseBody::Json(text.to_string())
+    } else {
+        InvokeResponseBody::Json(serde_json::json!(text).to_string())
+    }
 }
 
 fn websocket_message_to_channel_body(
     message: std::result::Result<Message, tokio_tungstenite::tungstenite::Error>,
 ) -> (Option<InvokeResponseBody>, bool) {
     match message {
-        Ok(Message::Text(text)) => (Some(raw_text_channel_body(&text)), false),
+        Ok(Message::Text(text)) => (Some(text_channel_body(&text)), false),
         Ok(Message::Close(_)) => (None, true),
         Ok(Message::Binary(_) | Message::Ping(_) | Message::Pong(_) | Message::Frame(_)) => (None, false),
         Err(err) => {
             log::warn!("websocket error: {err}");
             let error_message = Error::from(err).to_string();
-            (Some(raw_text_channel_body(&error_message)), true)
+            (Some(text_channel_body(&error_message)), true)
         }
     }
 }
 
-fn channel_body_to_text_bytes(body: InvokeResponseBody) -> Option<Vec<u8>> {
+fn channel_body_to_text_bytes(body: InvokeResponseBody) -> Vec<u8> {
     match body {
-        InvokeResponseBody::Raw(bytes) => Some(bytes),
-        InvokeResponseBody::Json(_) => None,
+        InvokeResponseBody::Raw(bytes) => bytes,
+        InvokeResponseBody::Json(text) => text.into_bytes(),
     }
 }
 
@@ -72,9 +79,7 @@ where
     F: Fn(Vec<u8>) + Send + 'static,
 {
     move |data| {
-        if let Some(bytes) = channel_body_to_text_bytes(data) {
-            on_message(bytes);
-        }
+        on_message(channel_body_to_text_bytes(data));
         true
     }
 }
@@ -1124,14 +1129,14 @@ mod tests {
         serde_json::to_string(&value)
     }
 
-    fn raw_channel_body_len(payload: &str) -> usize {
-        match raw_text_channel_body(payload) {
-            InvokeResponseBody::Raw(bytes) => {
-                let len = bytes.len();
-                std::hint::black_box(bytes);
+    fn channel_body_len(payload: &str) -> usize {
+        match text_channel_body(payload) {
+            InvokeResponseBody::Json(text) => {
+                let len = text.len();
+                std::hint::black_box(text);
                 len
             }
-            InvokeResponseBody::Json(_) => unreachable!("text websocket messages are sent as raw bytes"),
+            InvokeResponseBody::Raw(_) => unreachable!("text channel bodies are always JSON"),
         }
     }
 
@@ -1151,13 +1156,56 @@ mod tests {
     }
 
     #[test]
-    fn raw_channel_body_can_be_counted_without_json_reparse() -> std::result::Result<(), String> {
+    fn json_text_channel_body_roundtrips_bytes_exactly() {
         let payload = r#"{"connections":[{"id":"a","metadata":{"host":"example.com"}}]}"#;
-        let bytes = channel_body_to_text_bytes(raw_text_channel_body(payload))
-            .ok_or_else(|| "raw text channel body did not produce bytes".to_string())?;
+        assert_eq!(
+            channel_body_to_text_bytes(text_channel_body(payload)),
+            payload.as_bytes()
+        );
+    }
 
-        assert_eq!(bytes, payload.as_bytes());
-        Ok(())
+    #[test]
+    fn json_text_becomes_json_channel_body() {
+        let payload = r#"{"up":1,"down":2}"#;
+        assert!(matches!(text_channel_body(payload),
+            InvokeResponseBody::Json(text) if text == payload));
+    }
+
+    #[test]
+    fn non_json_text_is_delivered_as_a_json_string() {
+        let payload = "websocket error: connection closed";
+        assert!(matches!(text_channel_body(payload),
+            InvokeResponseBody::Json(text)
+                if serde_json::from_str::<String>(&text).ok().as_deref() == Some(payload)));
+    }
+
+    #[test]
+    fn websocket_error_message_is_json_encoded() {
+        let err = tokio_tungstenite::tungstenite::Error::ConnectionClosed;
+        let (body, should_close) = websocket_message_to_channel_body(Err(err));
+        assert!(should_close);
+        assert!(matches!(body,
+            Some(InvokeResponseBody::Json(text))
+                if serde_json::from_str::<String>(&text).ok().is_some_and(|message| !message.is_empty())));
+    }
+
+    #[test]
+    fn every_channel_body_is_valid_json() {
+        let frames = [
+            r#"{"up":69632,"down":3810304}"#,
+            "plain error text",
+            "text with \"escapes\" and\nnewlines",
+            "",
+            "\0 control byte",
+        ];
+        for frame in frames {
+            let body = websocket_message_to_channel_body(Ok(Message::Text(frame.into()))).0;
+            assert!(
+                matches!(&body, Some(InvokeResponseBody::Json(text))
+                    if serde_json::from_str::<serde::de::IgnoredAny>(text).is_ok()),
+                "text frames must produce a valid-JSON channel body, got {body:?}"
+            );
+        }
     }
 
     #[test]
@@ -1178,24 +1226,142 @@ mod tests {
         }
         let old_elapsed = old_started.elapsed();
 
-        let raw_started = Instant::now();
-        let mut raw_len = 0usize;
+        let channel_started = Instant::now();
+        let mut channel_len = 0usize;
         for _ in 0..iterations {
-            raw_len = raw_len.wrapping_add(std::hint::black_box(raw_channel_body_len(std::hint::black_box(
-                &payload,
-            ))));
+            channel_len =
+                channel_len.wrapping_add(std::hint::black_box(channel_body_len(std::hint::black_box(&payload))));
         }
-        let raw_elapsed = raw_started.elapsed();
+        let channel_elapsed = channel_started.elapsed();
 
         println!(
-            "payload={}B iterations={} old={:?} raw={:?} raw_speedup={:.2}x old_len={} raw_len={}",
+            "payload={}B iterations={} old={:?} channel={:?} channel_speedup={:.2}x old_len={} channel_len={}",
             payload.len(),
             iterations,
             old_elapsed,
-            raw_elapsed,
-            old_elapsed.as_secs_f64() / raw_elapsed.as_secs_f64(),
+            channel_elapsed,
+            old_elapsed.as_secs_f64() / channel_elapsed.as_secs_f64(),
             old_len,
-            raw_len
+            channel_len
+        );
+        Ok(())
+    }
+
+    // Stress A/B of the eval-path wire cost tauri pays per InvokeResponseBody variant
+    // below the direct-execute thresholds (Raw < 1 KiB, Json < 8 KiB): Raw becomes a
+    // JSON number array via serde_json::to_string(&bytes), Json is embedded as-is.
+    // Raw frames >= 1 KiB took the fetch queue instead (octet-stream, no number
+    // array), so large-payload raw numbers model the eval path only. Validation
+    // (IgnoredAny scan) is included in Json timings since it runs on every frame.
+    // The 4-thread phase models the four live ws streams pumping concurrently.
+    // Set AB_ITERS to scale iteration counts.
+    #[test]
+    #[ignore]
+    fn compare_raw_vs_json_channel_serialization() -> std::result::Result<(), String> {
+        let scale: usize = std::env::var("AB_ITERS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(1)
+            .max(1);
+
+        let traffic = r#"{"up":69632,"down":3810304}"#.to_string();
+        let memory = r#"{"inuse":536870912,"oslimit":0}"#.to_string();
+        let logs =
+            r#"{"type":"info","payload":"[TCP] 198.18.0.1:52311 --> example.com:443 match Match using Proxy[DIRECT]"}"#
+                .to_string();
+        let connections_64k = sample_connections_payload(64 * 1024);
+        let cases: Vec<(&str, String)> = vec![
+            ("traffic", traffic.clone()),
+            ("memory", memory.clone()),
+            ("logs", logs.clone()),
+            ("connections-64k", connections_64k.clone()),
+            ("connections-256k", sample_connections_payload(256 * 1024)),
+            ("connections-1m", sample_connections_payload(1024 * 1024)),
+        ];
+
+        for (name, payload) in &cases {
+            let base: usize = if payload.len() <= 1024 {
+                1_000_000
+            } else if payload.len() <= 128 * 1024 {
+                20_000
+            } else if payload.len() <= 512 * 1024 {
+                4_000
+            } else {
+                2_000
+            };
+            let iterations = base.saturating_mul(scale);
+
+            let raw_started = Instant::now();
+            let mut raw_len = 0usize;
+            for _ in 0..iterations {
+                // what tauri does to an InvokeResponseBody::Raw before eval/fetch
+                let wire =
+                    serde_json::to_string(std::hint::black_box(payload.as_bytes())).map_err(|e| e.to_string())?;
+                raw_len = raw_len.wrapping_add(std::hint::black_box(wire.len()));
+            }
+            let raw_elapsed = raw_started.elapsed();
+
+            let json_started = Instant::now();
+            let mut json_len = 0usize;
+            for _ in 0..iterations {
+                json_len = json_len.wrapping_add(std::hint::black_box(channel_body_len(std::hint::black_box(payload))));
+            }
+            let json_elapsed = json_started.elapsed();
+
+            let raw_mbps = payload.len() as f64 * iterations as f64 / raw_elapsed.as_secs_f64() / 1024.0 / 1024.0;
+            let json_mbps = payload.len() as f64 * iterations as f64 / json_elapsed.as_secs_f64() / 1024.0 / 1024.0;
+            println!(
+                "{name}: payload={}B iters={iterations} wire: raw={}B json={}B ratio={:.2}x | \
+                 serialize: raw={:.1}us json={:.1}us speedup={:.2}x | throughput: raw={:.0}MB/s json={:.0}MB/s",
+                payload.len(),
+                raw_len / iterations,
+                json_len / iterations,
+                (raw_len as f64) / (json_len as f64),
+                raw_elapsed.as_secs_f64() * 1e6 / iterations as f64,
+                json_elapsed.as_secs_f64() * 1e6 / iterations as f64,
+                raw_elapsed.as_secs_f64() / json_elapsed.as_secs_f64(),
+                raw_mbps,
+                json_mbps,
+            );
+        }
+
+        let mix: [(String, usize); 4] = [
+            (traffic, 300_000),
+            (memory, 300_000),
+            (logs, 300_000),
+            (connections_64k, 3_000),
+        ];
+        let run_mix = |as_json: bool| -> (std::time::Duration, u64) {
+            let sink = std::sync::atomic::AtomicU64::new(0);
+            let started = Instant::now();
+            std::thread::scope(|scope| {
+                for _ in 0..4 {
+                    scope.spawn(|| {
+                        let mut local = 0u64;
+                        for (payload, iterations) in &mix {
+                            for _ in 0..*iterations {
+                                local = local.wrapping_add(if as_json {
+                                    channel_body_len(payload) as u64
+                                } else {
+                                    serde_json::to_string(payload.as_bytes()).map_or(0, |wire| wire.len() as u64)
+                                });
+                            }
+                        }
+                        sink.fetch_add(local, std::sync::atomic::Ordering::Relaxed);
+                    });
+                }
+            });
+            (started.elapsed(), sink.load(std::sync::atomic::Ordering::Relaxed))
+        };
+
+        let (raw_elapsed, raw_ops) = run_mix(false);
+        let (json_elapsed, json_ops) = run_mix(true);
+        println!(
+            "4-thread mix (traffic/memory/logs 300k each + connections-64k 3k, per thread): \
+             raw={:?} json={:?} speedup={:.2}x | raw_ops={raw_ops} json_ops={json_ops}",
+            raw_elapsed,
+            json_elapsed,
+            raw_elapsed.as_secs_f64() / json_elapsed.as_secs_f64(),
         );
         Ok(())
     }

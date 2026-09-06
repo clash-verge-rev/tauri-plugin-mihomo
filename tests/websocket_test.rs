@@ -9,13 +9,18 @@ mod common;
 
 fn handle_message<T: Debug + serde::de::DeserializeOwned>(data: Vec<u8>) {
     match String::from_utf8(data) {
-        Ok(text) if text.starts_with("Websocket error") || text.starts_with("websocket error") => {
-            println!("received error: {text}");
+        // non-JSON frames (error strings) arrive JSON-encoded; unwrap them first
+        Ok(text) => {
+            let text = serde_json::from_str::<String>(&text).unwrap_or(text);
+            if text.starts_with("Websocket error") || text.starts_with("websocket error") {
+                println!("received error: {text}");
+            } else {
+                match serde_json::from_str::<T>(&text) {
+                    Ok(data) => println!("{data:?}"),
+                    Err(error) => println!("failed to parse websocket payload: {error}; payload={text}"),
+                }
+            }
         }
-        Ok(text) => match serde_json::from_str::<T>(&text) {
-            Ok(data) => println!("{data:?}"),
-            Err(error) => println!("failed to parse websocket payload: {error}; payload={text}"),
-        },
         Err(error) => println!("failed to decode websocket payload: {error}"),
     }
 }

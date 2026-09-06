@@ -296,7 +296,6 @@ async function upgradeGeo() {
 async function clearAllWsConnections() {
     await invoke("plugin:mihomo|clear_all_ws_connections");
 }
-const textDecoder = new TextDecoder();
 function isMessageKind(message) {
     if (typeof message !== "object" ||
         message === null ||
@@ -313,11 +312,9 @@ function normalizeWebSocketMessage(message) {
     if (typeof message === "string") {
         return { type: "Text", data: message };
     }
-    if (message instanceof ArrayBuffer) {
-        return { type: "Text", data: textDecoder.decode(new Uint8Array(message)) };
-    }
-    const bytes = Array.isArray(message) ? new Uint8Array(message) : message;
-    return { type: "Text", data: textDecoder.decode(bytes) };
+    // A Json channel body arrives as an already-parsed object; re-serialize it to
+    // keep the public Text-message contract (consumers JSON.parse message.data).
+    return { type: "Text", data: JSON.stringify(message) };
 }
 function dispatchWebSocketMessage(listeners, message) {
     const normalizedMessage = normalizeWebSocketMessage(message);

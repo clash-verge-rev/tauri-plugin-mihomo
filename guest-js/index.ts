@@ -390,12 +390,9 @@ export interface MessageKind<T, D> {
 
 export type Message = MessageKind<"Text", string>;
 
-type RawTextChannelMessage =
-  string | ArrayBuffer | Uint8Array | number[] | Message;
+type ChannelMessage = string | object | Message;
 
-const textDecoder = new TextDecoder();
-
-function isMessageKind(message: RawTextChannelMessage): message is Message {
+function isMessageKind(message: ChannelMessage): message is Message {
   if (
     typeof message !== "object" ||
     message === null ||
@@ -408,7 +405,7 @@ function isMessageKind(message: RawTextChannelMessage): message is Message {
   return value.type === "Text" && typeof value.data === "string";
 }
 
-function normalizeWebSocketMessage(message: RawTextChannelMessage): Message {
+function normalizeWebSocketMessage(message: ChannelMessage): Message {
   if (isMessageKind(message)) {
     return message;
   }
@@ -416,17 +413,14 @@ function normalizeWebSocketMessage(message: RawTextChannelMessage): Message {
     return { type: "Text", data: message };
   }
 
-  if (message instanceof ArrayBuffer) {
-    return { type: "Text", data: textDecoder.decode(new Uint8Array(message)) };
-  }
-
-  const bytes = Array.isArray(message) ? new Uint8Array(message) : message;
-  return { type: "Text", data: textDecoder.decode(bytes) };
+  // A Json channel body arrives as an already-parsed object; re-serialize it to
+  // keep the public Text-message contract (consumers JSON.parse message.data).
+  return { type: "Text", data: JSON.stringify(message) };
 }
 
 function dispatchWebSocketMessage(
   listeners: Set<(arg: Message) => void>,
-  message: RawTextChannelMessage,
+  message: ChannelMessage,
 ): void {
   const normalizedMessage = normalizeWebSocketMessage(message);
   listeners.forEach((listener) => {
@@ -439,8 +433,8 @@ async function openWebSocketCommand(
   args: Record<string, unknown> = {},
 ): Promise<MihomoWebSocket> {
   const listeners: Set<(arg: Message) => void> = new Set();
-  const onMessage = new Channel<RawTextChannelMessage>();
-  onMessage.onmessage = (message: RawTextChannelMessage): void => {
+  const onMessage = new Channel<ChannelMessage>();
+  onMessage.onmessage = (message: ChannelMessage): void => {
     dispatchWebSocketMessage(listeners, message);
   };
 
