@@ -23,7 +23,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    DEFAULT_REQUEST_TIMEOUT, DOWNLOAD_FILE_TIMEOUT, Error, Result,
+    DEFAULT_REQUEST_TIMEOUT, DOWNLOAD_FILE_TIMEOUT, Error, PROVIDER_UPDATE_TIMEOUT, Result,
     models::{
         BaseConfig, ConnectionManager, Connections, CoreUpdaterChannel, ErrorResponse, Groups, LogLevel, MihomoVersion,
         Protocol, Proxies, Proxy, ProxyDelay, ProxyProvider, ProxyProviders, RuleProviders, Rules, WsConnectionId,
@@ -799,6 +799,7 @@ impl Mihomo {
         let response = self
             .load_ctx()
             .build_request(Method::PUT, &format!("/providers/proxies/{provider_name_encode}"))?
+            .timeout(PROVIDER_UPDATE_TIMEOUT)
             .send()
             .await?;
         if !response.status().is_success() {
@@ -1006,6 +1007,7 @@ impl Mihomo {
         let response = self
             .load_ctx()
             .build_request(Method::PUT, &format!("/providers/rules/{provider_name_encode}"))?
+            .timeout(PROVIDER_UPDATE_TIMEOUT)
             .send()
             .await?;
         if !response.status().is_success() {
