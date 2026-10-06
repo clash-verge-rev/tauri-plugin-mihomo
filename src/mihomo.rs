@@ -416,7 +416,7 @@ impl Mihomo {
                 let (cancel_reader, cancel_reader_rx) = tokio::sync::oneshot::channel();
                 let reader_key = ws_reader_key(&manager, id);
 
-                manager.0.insert(id, writer);
+                manager.0.insert(id, Arc::new(tokio::sync::Mutex::new(writer)));
                 track_ws_reader(reader_key, cancel_reader);
 
                 spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
@@ -434,7 +434,7 @@ impl Mihomo {
                 let (cancel_reader, cancel_reader_rx) = tokio::sync::oneshot::channel();
                 let reader_key = ws_reader_key(&manager, id);
 
-                manager.0.insert(id, writer);
+                manager.0.insert(id, Arc::new(tokio::sync::Mutex::new(writer)));
                 track_ws_reader(reader_key, cancel_reader);
 
                 spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
@@ -448,7 +448,8 @@ impl Mihomo {
         log::debug!("disconnecting connection: {id}");
         // 先通过 websocket 发送关闭信息, 再发送取消读取信息的关闭信号
         {
-            let Some(mut conn) = self.connection_manager.0.get_mut(&id) else {
+            // Clone the writer out: a map guard held across the send blocks every synchronous map access.
+            let Some(writer) = self.connection_manager.0.get(&id).map(|conn| Arc::clone(conn.value())) else {
                 log::debug!("connection not found: {id}");
                 return Err(Error::ConnectionNotFound(id));
             };
@@ -459,8 +460,7 @@ impl Mihomo {
             }));
 
             log::debug!("send close message");
-            let writer = conn.value_mut();
-            let _ = writer.send(close_message).await;
+            let _ = writer.lock().await.send(close_message).await;
         }
 
         if let Some(timeout) = force_timeout {

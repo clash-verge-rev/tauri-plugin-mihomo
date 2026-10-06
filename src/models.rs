@@ -1118,4 +1118,4 @@ pub struct ErrorResponse {
 pub type WsConnectionId = Uuid;
 
 #[derive(Default, Clone)]
-pub struct ConnectionManager(pub Arc<ClashMap<WsConnectionId, WsWriteKind>>);
+pub struct ConnectionManager(pub Arc<ClashMap<WsConnectionId, Arc<tokio::sync::Mutex<WsWriteKind>>>>);
