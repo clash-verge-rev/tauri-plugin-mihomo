@@ -8,7 +8,7 @@ exclude = ["/examples", "/dist-js", "/guest-js", "/node_modules"]
 links = "tauri-plugin-mihomo"
 
 [dependencies]
-tauri = { version = "2" }
+tauri = { version = "3.0.0-alpha.1" }
 thiserror = "2"
 reqwest = { version = "0.13", features = ["json", "query"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -29,7 +29,7 @@ uuid = { version = "1.24.0", features = ["v4", "serde"] }
 windows-sys = "0.61"
 
 [build-dependencies]
-tauri-plugin = { version = "2", features = ["build"] }
+tauri-plugin = { version = "3.0.0-alpha.0", features = ["build"] }
 
 [dev-dependencies]
 dotenvy = "=0.15.7"
