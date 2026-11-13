@@ -97,7 +97,7 @@ struct ConnectionCount {
 }
 
 fn connections_count_body(count: usize) -> InvokeResponseBody {
-    InvokeResponseBody::Json(serde_json::json!({ "count": count }).to_string())
+    InvokeResponseBody::Json(format!("{{\"count\":{count}}}"))
 }
 
 // Error frames must be forwarded unchanged: consumers rely on the error text
@@ -1347,9 +1347,11 @@ mod tests {
 
     #[test]
     fn connections_count_body_is_valid_json_with_count() {
-        let body = connections_count_body(42);
-        assert!(matches!(&body,
-            InvokeResponseBody::Json(text) if text.as_str() == r#"{"count":42}"#));
+        for count in [0, 9, 10, 42, 999, 1000, usize::MAX] {
+            let body = connections_count_body(count);
+            let expected = serde_json::json!({ "count": count }).to_string();
+            assert!(matches!(body, InvokeResponseBody::Json(text) if text == expected));
+        }
     }
 
     #[test]
