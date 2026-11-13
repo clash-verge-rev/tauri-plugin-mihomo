@@ -54,7 +54,9 @@ async fn mihomo_websocket_traffic() -> Result<()> {
     let mihomo = common::mihomo();
     let websocket_id = mihomo
         .ws_traffic(move |data| {
-            handle_message::<Traffic>(data);
+            if let Ok(traffic) = serde_json::from_str::<Traffic>(data) {
+                println!("{traffic:?}");
+            }
         })
         .await?;
     println!("WebSocket ID: {websocket_id}");
