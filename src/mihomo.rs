@@ -102,10 +102,11 @@ fn connections_count_body(count: usize) -> InvokeResponseBody {
 
 // Error frames must be forwarded unchanged: consumers rely on the error text
 // to trigger reconnection.
-fn connections_count_forward_body(text: String) -> InvokeResponseBody {
-    serde_json::from_str::<ConnectionsCount>(&text).map_or(InvokeResponseBody::Json(text), |count| {
-        connections_count_body(count.connections.len())
-    })
+fn connections_count_forward_body(text: &str) -> InvokeResponseBody {
+    match serde_json::from_str::<ConnectionsCount>(text) {
+        Ok(count) => connections_count_body(count.connections.len()),
+        Err(_) => text_channel_body(text),
+    }
 }
 
 fn track_ws_reader(key: WsReaderKey, cancel_reader: tokio::sync::oneshot::Sender<()>) {
@@ -129,6 +130,7 @@ fn spawn_ws_reader<R, F>(
     mut cancel_reader_rx: tokio::sync::oneshot::Receiver<()>,
     reader_key: WsReaderKey,
     on_message: F,
+    text_to_body: fn(&str) -> InvokeResponseBody,
 ) where
     R: Stream<Item = std::result::Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin + Send + 'static,
     F: Fn(InvokeResponseBody) -> bool + Send + 'static,
@@ -145,7 +147,10 @@ fn spawn_ws_reader<R, F>(
                 message = reader.next() => {
                     match message {
                         Some(message) => {
-                            let (response, should_close) = websocket_message_to_channel_body(message);
+                            let (response, should_close) = match message {
+                                Ok(Message::Text(text)) => (Some(text_to_body(&text)), false),
+                                other => websocket_message_to_channel_body(other),
+                            };
                             if should_close {
                                 log::debug!("connection [{id}] closed");
                             }
@@ -401,6 +406,20 @@ impl Mihomo {
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
+        self.connect_with_text_body(suffix_url, queries, on_message, text_channel_body)
+            .await
+    }
+
+    async fn connect_with_text_body<F>(
+        &self,
+        suffix_url: &str,
+        queries: Option<Vec<(&str, &str)>>,
+        on_message: F,
+        text_to_body: fn(&str) -> InvokeResponseBody,
+    ) -> Result<WsConnectionId>
+    where
+        F: Fn(InvokeResponseBody) -> bool + Send + 'static,
+    {
         let ctx = self.load_ctx();
         let id = uuid::Uuid::new_v4();
         let url = ctx.get_websocket_url(suffix_url, queries)?;
@@ -419,7 +438,15 @@ impl Mihomo {
                 manager.0.insert(id, Arc::new(tokio::sync::Mutex::new(writer)));
                 track_ws_reader(reader_key, cancel_reader);
 
-                spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
+                spawn_ws_reader(
+                    manager,
+                    id,
+                    reader,
+                    cancel_reader_rx,
+                    reader_key,
+                    on_message,
+                    text_to_body,
+                );
 
                 Ok(id)
             }
@@ -437,7 +464,15 @@ impl Mihomo {
                 manager.0.insert(id, Arc::new(tokio::sync::Mutex::new(writer)));
                 track_ws_reader(reader_key, cancel_reader);
 
-                spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
+                spawn_ws_reader(
+                    manager,
+                    id,
+                    reader,
+                    cancel_reader_rx,
+                    reader_key,
+                    on_message,
+                    text_to_body,
+                );
                 Ok(id)
             }
         }
@@ -580,13 +615,8 @@ impl Mihomo {
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
-        self.connect("/connections", None, move |body| {
-            match String::from_utf8(channel_body_to_text_bytes(body)) {
-                Ok(text) => on_message(connections_count_forward_body(text)),
-                Err(_) => true, // unreachable: text frames are valid UTF-8
-            }
-        })
-        .await
+        self.connect_with_text_body("/connections", None, on_message, connections_count_forward_body)
+            .await
     }
 
     /// WebSocket: Mihomo 日志数据
@@ -1265,16 +1295,54 @@ mod tests {
     fn connections_count_forward_body_extracts_count_from_snapshots() {
         let snapshot =
             r#"{"downloadTotal":1,"uploadTotal":2,"connections":[{"id":"a"},{"id":"b"},{"id":"c"}]}"#.to_string();
-        assert!(matches!(connections_count_forward_body(snapshot),
+        assert!(matches!(connections_count_forward_body(&snapshot),
             InvokeResponseBody::Json(text) if text == r#"{"count":3}"#));
     }
 
     #[test]
     fn connections_count_forward_body_passes_error_frames_through() {
         let error_frame = serde_json::json!("websocket error: connection closed").to_string();
-        let forwarded = connections_count_forward_body(error_frame.clone());
+        let forwarded = connections_count_forward_body(&error_frame);
         assert!(matches!(&forwarded,
             InvokeResponseBody::Json(text) if *text == error_frame));
+    }
+
+    #[test]
+    fn connections_count_preserves_fallback_and_json_shapes() {
+        #[derive(serde::Deserialize)]
+        struct PreviousCount {
+            #[serde(default)]
+            connections: Vec<serde::de::IgnoredAny>,
+        }
+        for text in [
+            r#"{"connections":[]}"#,
+            r#"{"connections":[null,1,{},[1,2],"é"]}"#,
+            "{}",
+            r#"{"connections":null}"#,
+            r#"{"connections":1}"#,
+            r#"{"connections":[],"connections":[{}]}"#,
+            "[[]]",
+            "null",
+            "true",
+            r#""Websocket error: closed""#,
+            "Websocket error: closed",
+            "{invalid",
+            "",
+        ] {
+            let InvokeResponseBody::Json(encoded) = text_channel_body(text) else {
+                unreachable!()
+            };
+            let expected = match serde_json::from_str::<PreviousCount>(&encoded) {
+                Ok(count) => connections_count_body(count.connections.len()),
+                Err(_) => InvokeResponseBody::Json(encoded),
+            };
+            let (InvokeResponseBody::Json(expected), InvokeResponseBody::Json(actual)) =
+                (expected, connections_count_forward_body(text))
+            else {
+                unreachable!()
+            };
+            assert_eq!(actual, expected, "input: {text}");
+        }
     }
 
     #[test]
