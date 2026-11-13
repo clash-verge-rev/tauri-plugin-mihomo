@@ -130,10 +130,9 @@ fn spawn_ws_reader<R, F>(
     mut cancel_reader_rx: tokio::sync::oneshot::Receiver<()>,
     reader_key: WsReaderKey,
     on_message: F,
-    text_to_body: fn(&str) -> InvokeResponseBody,
 ) where
     R: Stream<Item = std::result::Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin + Send + 'static,
-    F: Fn(InvokeResponseBody) -> bool + Send + 'static,
+    F: Fn(&str) -> bool + Send + 'static,
 {
     tokio::spawn(async move {
         loop {
@@ -147,14 +146,20 @@ fn spawn_ws_reader<R, F>(
                 message = reader.next() => {
                     match message {
                         Some(message) => {
-                            let (response, should_close) = match message {
-                                Ok(Message::Text(text)) => (Some(text_to_body(&text)), false),
-                                other => websocket_message_to_channel_body(other),
+                            let (keep_reader, should_close) = match message {
+                                Ok(Message::Text(text)) => (on_message(&text), false),
+                                other => {
+                                    let (body, close) = websocket_message_to_channel_body(other);
+                                    let keep = body.is_none_or(|body| match body {
+                                        InvokeResponseBody::Json(text) => on_message(&text),
+                                        InvokeResponseBody::Raw(_) => true,
+                                    });
+                                    (keep, close)
+                                }
                             };
                             if should_close {
                                 log::debug!("connection [{id}] closed");
                             }
-                            let keep_reader = response.is_none_or(&on_message);
                             if should_close || !keep_reader {
                                 if !keep_reader {
                                     log::debug!("message receiver dropped, closing websocket connection [{id}]");
@@ -420,6 +425,19 @@ impl Mihomo {
     where
         F: Fn(InvokeResponseBody) -> bool + Send + 'static,
     {
+        self.connect_with_text_handler(suffix_url, queries, move |text| on_message(text_to_body(text)))
+            .await
+    }
+
+    async fn connect_with_text_handler<F>(
+        &self,
+        suffix_url: &str,
+        queries: Option<Vec<(&str, &str)>>,
+        on_message: F,
+    ) -> Result<WsConnectionId>
+    where
+        F: Fn(&str) -> bool + Send + 'static,
+    {
         let ctx = self.load_ctx();
         let id = uuid::Uuid::new_v4();
         let url = ctx.get_websocket_url(suffix_url, queries)?;
@@ -438,15 +456,7 @@ impl Mihomo {
                 manager.0.insert(id, Arc::new(tokio::sync::Mutex::new(writer)));
                 track_ws_reader(reader_key, cancel_reader);
 
-                spawn_ws_reader(
-                    manager,
-                    id,
-                    reader,
-                    cancel_reader_rx,
-                    reader_key,
-                    on_message,
-                    text_to_body,
-                );
+                spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
 
                 Ok(id)
             }
@@ -464,15 +474,7 @@ impl Mihomo {
                 manager.0.insert(id, Arc::new(tokio::sync::Mutex::new(writer)));
                 track_ws_reader(reader_key, cancel_reader);
 
-                spawn_ws_reader(
-                    manager,
-                    id,
-                    reader,
-                    cancel_reader_rx,
-                    reader_key,
-                    on_message,
-                    text_to_body,
-                );
+                spawn_ws_reader(manager, id, reader, cancel_reader_rx, reader_key, on_message);
                 Ok(id)
             }
         }
@@ -552,12 +554,19 @@ impl Mihomo {
     // ------------------------------------------------------
     // |                     Mihomo API                     |
     // ------------------------------------------------------
-    /// WebSocket: Mihomo 流量数据
+    /// WebSocket traffic text, borrowed for the duration of the callback.
+    /// Parse or copy it before returning; the reader owns the frame buffer.
+    /// Text frames are forwarded verbatim without JSON validation or normalization.
+    /// Transport errors are delivered as JSON strings.
     pub async fn ws_traffic<F>(&self, on_message: F) -> Result<WsConnectionId>
     where
-        F: Fn(Vec<u8>) + Send + 'static,
+        F: Fn(&str) + Send + 'static,
     {
-        self.ws_traffic_checked(forward_channel_text(on_message)).await
+        self.connect_with_text_handler("/traffic", None, move |text| {
+            on_message(text);
+            true
+        })
+        .await
     }
 
     pub(crate) async fn ws_traffic_checked<F>(&self, on_message: F) -> Result<WsConnectionId>
