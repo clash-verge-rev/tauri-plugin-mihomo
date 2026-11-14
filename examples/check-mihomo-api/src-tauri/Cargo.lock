@@ -4040,7 +4040,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-mihomo"
-version = "0.5.6"
+version = "0.7.0"
 dependencies = [
  "arc-swap",
  "clashmap",
