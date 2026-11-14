@@ -1,6 +1,7 @@
 {
   "name": "tauri-plugin-mihomo-api",
   "version": "0.7.0",
+  "license": "GPL-3.0-only",
   "author": "oomeow",
   "description": "Tauri plugin for invoke Mihomo API",
   "type": "module",
@@ -14,7 +15,8 @@
   },
   "files": [
     "dist-js",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "cargo test export_bindings && rollup -c",
